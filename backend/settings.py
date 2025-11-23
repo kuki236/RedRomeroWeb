@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -126,4 +127,17 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-AUTH_USER_MODEL = 'users.User'
+AUTH_USER_MODEL = 'users.SystemUser'
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",      
+    "http://127.0.0.1:5173",
+]
+SIMPLE_JWT = {
+    'USER_ID_FIELD': 'user_id',
+    'USER_ID_CLAIM': 'user_id',  
+}
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}

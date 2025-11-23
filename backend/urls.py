@@ -1,22 +1,26 @@
-"""
-URL configuration for backend project.
+# backend/urls.py
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path
+from rest_framework_simplejwt.views import (
+    TokenRefreshView,
+)
+from users.views import AdminDashboardData
+from users.serializers import CustomTokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView as OriginalTokenObtainPairView
+
+# Define the custom Login View to use the customized serializer
+class CustomLoginView(OriginalTokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 urlpatterns = [
+    # Admin Interface
     path('admin/', admin.site.urls),
+    
+    # 2. JWT Authentication (Uses the custom view to inject user_id/role)
+    path('api/token/', CustomLoginView.as_view(), name='token_obtain_pair'), 
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    # 3. Dynamic route for the Admin Dashboard data
+    path('api/admin/dashboard-data/', AdminDashboardData.as_view(), name='admin_dashboard_data'), 
 ]

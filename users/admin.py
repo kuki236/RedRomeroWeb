@@ -1,14 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User
+from .models import SystemUser
 
-@admin.register(User)
+admin.site.register(SystemUser)
 class CustomUserAdmin(UserAdmin):
     """
     Configuración para ver a tus usuarios en el panel.
     Añadimos las columnas 'role' y 'phone_number' que creaste.
     """
-    model = User
+    model = SystemUser
     
     list_display = ('username', 'email', 'role', 'is_staff', 'is_active')
     
