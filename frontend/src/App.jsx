@@ -1,35 +1,68 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+
+// --- Layouts ---
+import MainLayout from './components/common/MainLayout';
+
+// --- Auth & General ---
+import Login from './pages/Login';
+import GeneralDashboard from './pages/GeneralDashboard';
+
+// --- Admin Pages ---
+import AdminDashboard from './pages/admin/AdminDashboard';
+import UserManagement from './pages/admin/UserManagement';
+
+// --- Employee Pages ---
+import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+
+// --- Volunteer Pages ---
+import VolunteerDashboard from './pages/volunteer/VolunteerDashboard';
+
+// --- Representative Pages ---
+import RepresentativeDashboard from './pages/representative/RepresentativeDashboard';
+
+// Wrapper for layout with Sidebar / Navbar
+const DashboardWrapper = () => (
+  <MainLayout>
+    <Outlet />
+  </MainLayout>
+);
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <BrowserRouter>
+      <Routes>
+
+        {/* Public access */}
+        <Route path="/" element={<Login />} />
+        
+        {/* Protected routes (with layout) */}
+        <Route element={<DashboardWrapper />}>
+
+            {/* General dashboard */}
+            <Route path="/dashboard" element={<GeneralDashboard />} />
+
+            {/* Admin routes */}
+            <Route path="/dashboard/admin" element={<AdminDashboard />} />
+            <Route path="/admin/usuarios" element={<UserManagement />} />
+
+            {/* Employee routes */}
+            <Route path="/dashboard/employee" element={<EmployeeDashboard />} />
+            
+            {/* Volunteer routes */}
+            <Route path="/dashboard/volunteer" element={<VolunteerDashboard />} />
+            
+            {/* Representative routes */}
+            <Route path="/dashboard/representative" element={<RepresentativeDashboard />} />
+
+        </Route>
+
+        {/* Fallback redirect */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
