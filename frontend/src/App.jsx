@@ -1,32 +1,65 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './Login';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
-// Import dashboard pages
-import AdminDashboard from './pages/AdminDashboard';
-import EmployeeDashboard from './pages/EmployeeDashboard';
-import VolunteerDashboard from './pages/VolunteerDashboard';
-import RepresentativeDashboard from './pages/RepresentativeDashboard';
-import UserManagement from './pages/UserManagement'; 
+// --- Layouts ---
+import MainLayout from './components/common/MainLayout';
+
+// --- Auth & General ---
+import Login from './pages/Login';
+import GeneralDashboard from './pages/GeneralDashboard';
+
+// --- Admin Pages ---
+import AdminDashboard from './pages/admin/AdminDashboard';
+import UserManagement from './pages/admin/UserManagement';
+
+// --- Employee Pages ---
+import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+
+// --- Volunteer Pages ---
+import VolunteerDashboard from './pages/volunteer/VolunteerDashboard';
+
+// --- Representative Pages ---
+import RepresentativeDashboard from './pages/representative/RepresentativeDashboard';
+
+// Wrapper for layout with Sidebar / Navbar
+const DashboardWrapper = () => (
+  <MainLayout>
+    <Outlet />
+  </MainLayout>
+);
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Route */}
+
+        {/* Public access */}
         <Route path="/" element={<Login />} />
         
-        {/* Protected Dashboard Routes */}
-        <Route path="/dashboard/admin" element={<AdminDashboard />} />
-        <Route path="/dashboard/employee" element={<EmployeeDashboard />} />
-        <Route path="/dashboard/volunteer" element={<VolunteerDashboard />} />
-        <Route path="/dashboard/representative" element={<RepresentativeDashboard />} />
-        
-        {/* --- admin routes--- */}
-        <Route path="/admin/usuarios" element={<UserManagement />} /> 
-        
-        {/* Fallback */}
+        {/* Protected routes (with layout) */}
+        <Route element={<DashboardWrapper />}>
+
+            {/* General dashboard */}
+            <Route path="/dashboard" element={<GeneralDashboard />} />
+
+            {/* Admin routes */}
+            <Route path="/dashboard/admin" element={<AdminDashboard />} />
+            <Route path="/admin/usuarios" element={<UserManagement />} />
+
+            {/* Employee routes */}
+            <Route path="/dashboard/employee" element={<EmployeeDashboard />} />
+            
+            {/* Volunteer routes */}
+            <Route path="/dashboard/volunteer" element={<VolunteerDashboard />} />
+            
+            {/* Representative routes */}
+            <Route path="/dashboard/representative" element={<RepresentativeDashboard />} />
+
+        </Route>
+
+        {/* Fallback redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
+
       </Routes>
     </BrowserRouter>
   );
