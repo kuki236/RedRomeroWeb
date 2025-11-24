@@ -5,12 +5,14 @@ import axios from 'axios';
 import { 
     Box, CssBaseline, Drawer, List, Typography, IconButton, 
     Paper, ListItem, ListItemButton, ListItemIcon, ListItemText, 
-    Avatar, InputBase, Button, Grid, Link, Chip, LinearProgress
+    Avatar, InputBase, Button, Grid, Link, Chip, LinearProgress, Divider
 } from '@mui/material';
 import { 
     Search, Notifications, Settings, 
     Dashboard as DashboardIcon, Business, Folder, People, VolunteerActivism, Description,
-    Add, MonetizationOn, PeopleAlt, Visibility, Edit, FileDownload, ArrowBackIos, ArrowForwardIos
+    Add, MonetizationOn, PeopleAlt, Visibility, Edit, FileDownload, ArrowBackIos, ArrowForwardIos,
+    // Nuevos iconos para el Sidebar completo
+    Badge, SupervisorAccount, Loyalty, Group, Assessment, ReceiptLong, Tune
 } from '@mui/icons-material';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -21,7 +23,7 @@ import { useRoleProtection } from '../hooks/useRoleProtection';
 // --- STYLE CONSTANTS ---
 const primaryColor = '#FF3F01';
 const successColor = '#10B981';
-const pieColors = ['#10B981', '#FF3F01', '#F59E0B']; 
+const pieColors = ['#10B981', '#FF3F01', '#F59E0B', '#3B82F6']; 
 
 // --- INITIAL STATE / LOADING STRUCTURE ---
 const initialKpiData = [
@@ -32,14 +34,30 @@ const initialKpiData = [
 ];
 
 // --- STATIC ELEMENTS ---
-const drawerWidth = 260;
+const drawerWidth = 280; // Un poco más ancho para acomodar nombres largos
+
+// Nueva estructura del Sidebar según tus requerimientos
 const navItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, active: true, link: '/dashboard/admin' }, 
-    { text: 'NGOs', icon: <Business />, link: '#' }, 
-    { text: 'Projects', icon: <Folder />, link: '#' }, 
-    { text: 'People', icon: <People />, link: '#' }, 
-    { text: 'Donations', icon: <VolunteerActivism />, link: '#' }, 
-    { text: 'Reports', icon: <Description />, link: '#' }
+    { header: 'General' },
+    { text: 'Dashboard', icon: <DashboardIcon />, link: '/dashboard/admin', active: true },
+    
+    { header: 'Gestión Principal' },
+    { text: 'Manage ONGs', icon: <Business />, link: '/admin/ongs' },
+    { text: 'Manage Projects', icon: <Folder />, link: '/admin/proyectos' },
+    
+    { header: 'Fuerza Laboral' },
+    { text: 'Employees', icon: <Badge />, link: '/admin/empleados' },
+    { text: 'Volunteers', icon: <VolunteerActivism />, link: '/admin/voluntarios' },
+    { text: 'Representatives', icon: <SupervisorAccount />, link: '/admin/representantes' },
+    
+    { header: 'Finanzas & Usuarios' },
+    { text: 'Donors', icon: <Loyalty />, link: '/admin/donantes' },
+    { text: 'Users', icon: <Group />, link: '/admin/usuarios' },
+    
+    { header: 'Sistema' },
+    { text: 'Reports & Analytics', icon: <Assessment />, link: '/admin/reportes' },
+    { text: 'Audit Logs', icon: <ReceiptLong />, link: '/admin/auditoria' },
+    { text: 'Configuration', icon: <Tune />, link: '/admin/config' },
 ];
 
 
@@ -56,9 +74,8 @@ export default function AdminDashboard() {
     const [chartData, setChartData] = useState({ trends: [], pie: [] });
     const [loading, setLoading] = useState(true);
 
-    // Helper to get color based on project state (used in table)
+    // Helper to get color based on project state
     const getStateStyles = (state) => {
-        // NOTE: States come capitalized from the Django view now: ACTIVO, REVISIÓN, PENDIENTE
         switch (state) {
             case 'ACTIVO': return { color: successColor, bgcolor: '#E8F5E9' };
             case 'REVISIÓN': 
@@ -68,12 +85,12 @@ export default function AdminDashboard() {
         }
     };
 
-    // Helper to calculate progress percentage for the bar
+    // Helper to calculate progress percentage
     const getProgressValue = (label) => {
         if (label.includes('%')) return parseFloat(label);
         if (label.includes('días restantes')) {
              const daysRemaining = parseFloat(label);
-             const maxDays = 500; // Define a max to calculate a relative percentage
+             const maxDays = 500; 
              return Math.max(0, 100 - (daysRemaining / maxDays) * 100);
         }
         return 0;
@@ -86,14 +103,11 @@ export default function AdminDashboard() {
 
         try {
             const response = await axios.get('http://127.0.0.1:8000/api/admin/dashboard-data/', {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
+                headers: { Authorization: `Bearer ${token}` }
             });
 
             const data = response.data;
             
-            // 1. Update KPI Data
             setKpiData([
                 { 
                     title: 'PROYECTOS ACTIVOS', 
@@ -125,14 +139,12 @@ export default function AdminDashboard() {
                 },
             ]);
 
-            // 2. Update Table Data
             setProjectData(data.active_projects_table);
 
-            // 3. Update Chart Data
             setChartData({
                 trends: data.donation_trends.map(row => ({
-                    name: row.name, // e.g., 'Jan', 'Feb'
-                    value: row.value // e.g., 20, 45 (Donation amount)
+                    name: row.name, 
+                    value: row.value 
                 })),
                 pie: data.project_status_pie.map((item, index) => ({
                     name: item.name,
@@ -152,25 +164,18 @@ export default function AdminDashboard() {
         }
     };
 
-
-    // --- AUTH CHECK & INITIAL LOAD ---
     useEffect(() => {
         const token = localStorage.getItem('token');
         const storedData = localStorage.getItem('user_data');
 
-        if (!token) {
-             navigate('/'); 
-             return;
-        }
+        if (!token) { navigate('/'); return; }
         
         if (storedData) {
             try {
                 const parsedData = JSON.parse(storedData);
                 setUserData(parsedData);
                 setUserRole(parsedData.role);
-            } catch (e) {
-                localStorage.clear();
-            }
+            } catch (e) { localStorage.clear(); }
         }
         
         fetchDashboardData();
@@ -185,8 +190,6 @@ export default function AdminDashboard() {
         return userData?.username ? userData.username.substring(0, 2).toUpperCase() : 'AD';
     };
 
-
-    // --- RENDERING ---
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -199,42 +202,64 @@ export default function AdminDashboard() {
         <Box sx={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', bgcolor: '#F8F9FA' }}>
             <CssBaseline />
 
-            {/* 1. SIDEBAR NAVIGATION (AS IS) */}
+            {/* SIDEBAR NAVIGATION */}
             <Drawer
                 sx={{
                     width: drawerWidth,
                     flexShrink: 0,
-                    '& .MuiDrawer-paper': { width: drawerWidth, boxSizing: 'border-box', borderRight: 'none', bgcolor: '#FFFFFF', p: 2 },
+                    '& .MuiDrawer-paper': { 
+                        width: drawerWidth, 
+                        boxSizing: 'border-box', 
+                        borderRight: 'none', 
+                        bgcolor: '#FFFFFF', 
+                        p: 2,
+                        '&::-webkit-scrollbar': { display: 'none' } // Hide scrollbar
+                    },
                 }}
                 variant="permanent"
                 anchor="left"
             >
-                {/* Logo Section */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 4, px: 2 }}>
                     <VolunteerActivism sx={{ color: primaryColor, fontSize: 30 }} />
                     <Typography variant="h6" fontWeight={800} color="text.primary">RedRomero</Typography>
                 </Box>
                 
-                {/* Navigation Links */}
                 <List>
-                    {navItems.map((item) => (
-                        <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
-                            <ListItemButton 
-                                sx={{ borderRadius: 2, bgcolor: item.active ? '#FFF0EB' : 'transparent', color: item.active ? primaryColor : '#64748B', '&:hover': { bgcolor: '#FFF0EB', color: primaryColor } }}
-                                onClick={() => navigate(item.link)}
-                            >
-                                <ListItemIcon sx={{ color: item.active ? primaryColor : '#64748B', minWidth: 40 }}>{item.icon}</ListItemIcon>
-                                <ListItemText primaryTypographyProps={{ fontWeight: item.active ? 700 : 500 }} primary={item.text} />
-                            </ListItemButton>
-                        </ListItem>
-                    ))}
+                    {navItems.map((item, index) => {
+                        if (item.header) {
+                            return (
+                                <Typography key={index} variant="caption" fontWeight={700} color="text.secondary" sx={{ px: 2, mt: 2, mb: 1, display: 'block', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                                    {item.header}
+                                </Typography>
+                            );
+                        }
+                        return (
+                            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                                <ListItemButton 
+                                    sx={{ 
+                                        borderRadius: 2, 
+                                        bgcolor: item.active ? '#FFF0EB' : 'transparent', 
+                                        color: item.active ? primaryColor : '#64748B', 
+                                        '&:hover': { bgcolor: '#FFF0EB', color: primaryColor } 
+                                    }}
+                                    onClick={() => navigate(item.link)}
+                                >
+                                    <ListItemIcon sx={{ color: item.active ? primaryColor : '#64748B', minWidth: 40 }}>{item.icon}</ListItemIcon>
+                                    <ListItemText 
+                                        primary={item.text} 
+                                        primaryTypographyProps={{ fontWeight: item.active ? 700 : 500, fontSize: '0.9rem' }} 
+                                    />
+                                </ListItemButton>
+                            </ListItem>
+                        );
+                    })}
                 </List>
             </Drawer>
 
-            {/* 2. MAIN CONTENT AREA */}
+            {/* MAIN CONTENT AREA */}
             <Box component="main" sx={{ flexGrow: 1, p: 3, width: `calc(100% - ${drawerWidth}px)`, overflowY: 'auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
                 
-                {/* TOP BAR (AS IS) */}
+                {/* TOP BAR */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Paper component="form" sx={{ p: '2px 4px', display: 'flex', alignItems: 'center', width: 400, borderRadius: 2, boxShadow: 'none', border: '1px solid #E2E8F0' }}>
                         <IconButton sx={{ p: '10px' }}><Search /></IconButton>
@@ -249,17 +274,16 @@ export default function AdminDashboard() {
                     </Box>
                 </Box>
 
-                {/* DASHBOARD HEADER (AS IS) */}
+                {/* DASHBOARD HEADER */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
                         <Typography variant="h4" fontWeight={800} color="#1E293B">NGO Management Platform</Typography>
-                        <Typography variant="body2" color="text.secondary">Admin Global</Typography>
+                        <Typography variant="body2" color="text.secondary">Admin Global Dashboard</Typography>
                     </Box>
+                    <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, borderRadius: 2, textTransform: 'none', fontWeight: 700, px: 3, py: 1, '&:hover': { bgcolor: '#D93602' } }}>Create Report</Button>
                 </Box>
 
-                {/* --- START DYNAMIC CONTENT AREA --- */}
-
-                {/* KPI CARDS (4 Cards) */}
+                {/* KPI CARDS */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     {kpiData.map((kpi, i) => (
                         <Grid item xs={12} sm={6} md={3} key={i}>
@@ -275,9 +299,9 @@ export default function AdminDashboard() {
                     ))}
                 </Grid>
 
-                {/* CHARTS SECTION (2 Charts) */}
+                {/* CHARTS */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
-                    {/* Donation Trends (Area Chart) */}
+                    {/* Donation Trends */}
                     <Grid item xs={12} md={7}>
                         <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400 }}>
                             <Typography variant="h6" fontWeight={700} mb={2}>📈 Tendencia de Donaciones 2025</Typography>
@@ -285,7 +309,7 @@ export default function AdminDashboard() {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={chartData.trends}>
                                         <defs>
-                                            <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                                            <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2={1}>
                                                 <stop offset="5%" stopColor={primaryColor} stopOpacity={0.8}/>
                                                 <stop offset="95%" stopColor={primaryColor} stopOpacity={0}/>
                                             </linearGradient>
@@ -308,8 +332,18 @@ export default function AdminDashboard() {
                             <Box sx={{ flexGrow: 1, width: '100%', minHeight: 0, position: 'relative' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
-                                        <Pie data={chartData.pie} innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" nameKey="name" label={(entry) => entry.name}>
-                                            {chartData.pie.map((entry, index) => ( <Cell key={`cell-${index}`} fill={entry.color} /> ))}
+                                        <Pie 
+                                            data={chartData.pie} 
+                                            innerRadius={60} 
+                                            outerRadius={100} 
+                                            paddingAngle={5} 
+                                            dataKey="value" 
+                                            nameKey="name" 
+                                            label={(entry) => entry.name}
+                                        >
+                                            {chartData.pie.map((entry, index) => ( 
+                                                <Cell key={`cell-${index}`} fill={entry.color} /> 
+                                            ))}
                                         </Pie>
                                         <Tooltip />
                                     </PieChart>
@@ -318,7 +352,7 @@ export default function AdminDashboard() {
                         </Paper>
                     </Grid>
                 </Grid>
-
+                
                 {/* PROJECTS TABLE */}
                 <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0' }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -329,7 +363,6 @@ export default function AdminDashboard() {
                         </Box>
                     </Box>
 
-                    {/* Filters & Search */}
                     <Box display="flex" gap={2} mb={3} alignItems="center">
                         <InputBase 
                             sx={{ p: '5px 10px', flex: 1, border: '1px solid #E2E8F0', borderRadius: 1 }} 
@@ -337,40 +370,23 @@ export default function AdminDashboard() {
                             startAdornment={<Search sx={{ mr: 1, color: 'text.secondary' }} />} 
                         />
                         <select className="MuiInputBase-input" style={{ padding: 8, borderRadius: 4, border: '1px solid #E2E8F0' }}>
-                            <option>Todos</option>
-                            <option>Activo</option>
-                            <option>Revisión</option>
-                        </select>
-                        <select className="MuiInputBase-input" style={{ padding: 8, borderRadius: 4, border: '1px solid #E2E8F0' }}>
-                            <option>País</option>
-                            <option>Perú</option>
-                            <option>México</option>
-                        </select>
-                        <select className="MuiInputBase-input" style={{ padding: 8, borderRadius: 4, border: '1px solid #E2E8F0' }}>
-                            <option>Estado</option>
-                            <option>Activo</option>
-                            <option>Pendiente</option>
+                            <option>Todos</option><option>Activo</option>
                         </select>
                     </Box>
 
-                    {/* Table Structure */}
                     <Grid container spacing={1} sx={{ mb: 1, borderBottom: '2px solid #E2E8F0', fontWeight: 700 }}>
                         <Grid item xs={0.5}><Typography variant="body2">#</Typography></Grid>
                         <Grid item xs={3}><Typography variant="body2">Proyecto</Typography></Grid>
                         <Grid item xs={2.5}><Typography variant="body2">ONG</Typography></Grid>
                         <Grid item xs={2}><Typography variant="body2">Estado</Typography></Grid>
                         <Grid item xs={2}><Typography variant="body2">Progreso</Typography></Grid>
-                        <Grid item xs={2}>
-                            <Typography variant="body2">Acciones</Typography>
-                        </Grid>
+                        <Grid item xs={2}><Typography variant="body2">Acciones</Typography></Grid>
                     </Grid>
 
                     <List disablePadding>
                         {projectData.map((project, index) => {
-                            // Ensure project.state is uppercase
                             const statusStyle = getStateStyles(project.state.toUpperCase()); 
                             const progressValue = getProgressValue(project.progressLabel);
-                            
                             return (
                                 <ListItem key={project.id} disablePadding sx={{ py: 1.5, borderBottom: '1px solid #F1F5F9' }}>
                                     <Grid container spacing={1} alignItems="center">
@@ -378,16 +394,10 @@ export default function AdminDashboard() {
                                         <Grid item xs={3}><Typography variant="body2" fontWeight={600}>{project.project}</Typography></Grid>
                                         <Grid item xs={2.5}><Typography variant="body2" color="text.secondary">{project.ngo}</Typography></Grid>
                                         <Grid item xs={2}>
-                                            <Chip label={project.state} size="small" sx={{ 
-                                                bgcolor: statusStyle.bgcolor, 
-                                                color: statusStyle.color, 
-                                                fontWeight: 700,
-                                                fontSize: '0.7rem'
-                                            }} />
+                                            <Chip label={project.state} size="small" sx={{ bgcolor: statusStyle.bgcolor, color: statusStyle.color, fontWeight: 700, fontSize: '0.7rem' }} />
                                         </Grid>
                                         <Grid item xs={2}>
                                             <Typography variant="caption" color="text.secondary">{project.progressLabel}</Typography>
-                                            {/* Progress bar based on calculated value */}
                                             <LinearProgress variant="determinate" value={progressValue} sx={{ height: 5, borderRadius: 2 }} color="success" />
                                         </Grid>
                                         <Grid item xs={2}>
@@ -400,39 +410,19 @@ export default function AdminDashboard() {
                         })}
                     </List>
 
-                    {/* Pagination */}
                     <Box display="flex" justifyContent="space-between" alignItems="center" mt={3}>
                         <Typography variant="body2" color="text.secondary">Mostrando 1-10 de {projectData.length} (total)</Typography>
                         <Box display="flex" gap={1}>
                             <IconButton disabled><ArrowBackIos fontSize="small" /></IconButton>
-                            {[1, 2, 3, 4, 5].map(p => (
-                                <Button 
-                                    key={p} 
-                                    size="small" 
-                                    variant={p === 1 ? 'contained' : 'outlined'}
-                                    sx={{ 
-                                        minWidth: 35, 
-                                        p: 0, 
-                                        bgcolor: p === 1 ? primaryColor : 'transparent',
-                                        borderColor: p === 1 ? primaryColor : 'text.secondary',
-                                        color: p === 1 ? 'white' : primaryColor
-                                    }}
-                                >{p}</Button>
-                            ))}
+                            <Button size="small" variant='contained' sx={{ minWidth: 35, p: 0, bgcolor: primaryColor }}>1</Button>
                             <IconButton><ArrowForwardIos fontSize="small" /></IconButton>
                         </Box>
                     </Box>
                 </Paper>
 
-                {/* --- END DYNAMIC CONTENT AREA --- */}
-
-                {/* FOOTER SECTION (AS IS) */}
                 <Box sx={{ py: 3, px: 2, mt: 'auto', textAlign: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
-                        {'Copyright © '}
-                        <Link color="inherit" href="#">RedRomero</Link>{' '}
-                        {new Date().getFullYear()}
-                        {'. All rights reserved.'}
+                        {'Copyright © '} <Link color="inherit" href="#">RedRomero</Link> {new Date().getFullYear()} {'. All rights reserved.'}
                     </Typography>
                 </Box>
             </Box>

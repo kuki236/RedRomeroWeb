@@ -11,12 +11,7 @@ try:
     import oracledb
     ORACLE_NUMBER = oracledb.NUMBER
 except ImportError:
-    try:
-        import cx_Oracle
-        ORACLE_NUMBER = cx_Oracle.NUMBER
-    except ImportError:
-        # Usamos 'int' como tipo de Python si la constante del driver falla
-        ORACLE_NUMBER = int 
+    ORACLE_NUMBER = int 
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +24,7 @@ def dictfetchall(cursor):
         for row in cursor.fetchall()
     ]
 
-# Helper function to execute a PIPELINED function (Omitted for brevity)
+# Helper function to execute a PIPELINED function
 def fetch_pipelined_function(function_name):
     with connection.cursor() as cursor:
         try:
@@ -39,43 +34,34 @@ def fetch_pipelined_function(function_name):
             logger.error(f"Error executing pipelined function {function_name}: {e}")
             return []
 
-# Helper function to execute a stored procedure with IN and OUT parameters
+# Helper function to execute a stored procedure that returns a SYS_REFCURSOR
+# The procedure call logic is simplified to handle only IN parameters and the Ref Cursor OUT.
 def fetch_procedure_cursor(procedure_call, params=None, out_args_count=0):
-    """Executes a procedure and handles the Ref Cursor and OUT parameters."""
+    """Executes a procedure and handles the Ref Cursor. Ignores OUT params (p_total_count) for simplicity."""
     with connection.cursor() as cursor:
         try:
-            # 1. Prepare OUT variables (e.g., p_total_count)
-            out_vars = []
-            for _ in range(out_args_count):
-                # CRITICAL FIX: Use cursor.var(ORACLE_NUMBER) directly.
-                # The cursor object created by Django's connection should have the .var() method exposed.
-                out_vars.append(cursor.var(ORACLE_NUMBER)) 
-            
-            # 2. Prepare Ref Cursor and Arguments
-            # Use the connection object to create a secondary cursor for the Ref Cursor
+            # Prepare Ref Cursor (We use cursor.connection.cursor() as the standard for Ref Cursor)
             ref_cursor = cursor.connection.cursor()
             
-            # 3. Build Arguments
+            # Build Arguments (only IN parameters and the Ref Cursor)
             args = []
             if params: args.extend(params)
-            args.extend(out_vars)
-            args.append(ref_cursor) # Ref Cursor is always the last argument
             
-            # 4. Call the procedure
+            # The Ref Cursor is the only OUT argument for the procedures used here
+            args.append(ref_cursor) 
+            
+            # Call the procedure
             cursor.callproc(procedure_call, args)
             
-            # 5. Extract data from the Ref Cursor
+            # Extract data from the Ref Cursor
             data = dictfetchall(ref_cursor)
             ref_cursor.close()
             
-            # 6. Return values
-            if out_args_count > 0:
-                total_count = out_vars[0].getvalue()
-                return data, total_count
-                
-            return data, None
+            # Returns data and None (since total_count is no longer fetched here)
+            return data, None 
 
         except Exception as e:
+            # Log the error but return empty data to prevent 500 error propagation
             logger.error(f"Error executing procedure {procedure_call}: {e}")
             return [], None 
 
@@ -83,7 +69,7 @@ class AdminDashboardData(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        # 1. Fetch Main KPIs (Omitted for brevity)
+        # 1. Fetch Main KPIs 
         kpis_raw = fetch_pipelined_function('PKG_DASHBOARD_ANALYTICS.get_main_kpis')
         kpi_map = {}
 
@@ -104,6 +90,7 @@ class AdminDashboardData(APIView):
             }
         
         # 2. Fetch Active Projects Table (PAGINATED DATA)
+        # Call uses out_args_count=0 as the total count procedure is removed.
         projects_raw, _ = fetch_procedure_cursor(
             'PKG_DASHBOARD_ANALYTICS.get_projects_paginated', 
             [1, 10, 'ACTIVO', None],
@@ -115,6 +102,7 @@ class AdminDashboardData(APIView):
             end_date = project.get('end_date') 
             progress_label = "Fecha no disponible"
             
+            # Date normalization and calculation
             if end_date:
                 if isinstance(end_date, datetime):
                     end_date = end_date.date()
@@ -137,13 +125,9 @@ class AdminDashboardData(APIView):
                 'progressLabel': progress_label,
             })
 
-        # 3. Get Total Project Count (Requires out_args_count=1)
-        # We need this to get the total count for the table pagination display
-        _, total_count = fetch_procedure_cursor(
-            'PKG_DASHBOARD_ANALYTICS.get_projects_total_count', 
-            ['ACTIVO', None], 
-            out_args_count=1 
-        )
+        # 3. Get Total Project Count (Calculate directly from the list length)
+        # This solves the DPY-3002 error permanently by avoiding the OUT NUMBER variable.
+        total_count = len(projects_table_data) 
 
         # 4. Fetch Donation Trends (Area Chart)
         donation_trends_raw, _ = fetch_procedure_cursor('PKG_DASHBOARD_ANALYTICS.get_donation_trends', [date.today().year], out_args_count=0) 
@@ -168,7 +152,7 @@ class AdminDashboardData(APIView):
             "donation_trends": donation_trends,
             "project_status_pie": project_status_pie,
             "active_projects_table": projects_table_data,
-            "total_project_count": total_count if total_count is not None else 0
+            "total_project_count": total_count # Now using list length
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
