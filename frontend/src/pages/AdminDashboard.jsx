@@ -5,13 +5,13 @@ import axios from 'axios';
 import { 
     Box, CssBaseline, Drawer, List, Typography, IconButton, 
     Paper, ListItem, ListItemButton, ListItemIcon, ListItemText, 
-    Avatar, InputBase, Button, Grid, Link, Chip, LinearProgress, Divider
+    Avatar, InputBase, Button, Grid, Link, Chip, LinearProgress
 } from '@mui/material';
 import { 
     Search, Notifications, Settings, 
     Dashboard as DashboardIcon, Business, Folder, People, VolunteerActivism, Description,
     Add, MonetizationOn, PeopleAlt, Visibility, Edit, FileDownload, ArrowBackIos, ArrowForwardIos,
-    // Nuevos iconos para el Sidebar completo
+    // IMPORTANTE: Iconos nuevos para el menú completo
     Badge, SupervisorAccount, Loyalty, Group, Assessment, ReceiptLong, Tune
 } from '@mui/icons-material';
 import { 
@@ -24,42 +24,39 @@ import { useRoleProtection } from '../hooks/useRoleProtection';
 const primaryColor = '#FF3F01';
 const successColor = '#10B981';
 const pieColors = ['#10B981', '#FF3F01', '#F59E0B', '#3B82F6']; 
+const drawerWidth = 280; // Ancho ajustado para el menú completo
 
-// --- INITIAL STATE / LOADING STRUCTURE ---
+// --- MENÚ LATERAL COMPLETO (Sincronizado con UserManagement) ---
+const navItems = [
+    { header: 'General' },
+    { text: 'Dashboard', icon: <DashboardIcon />, link: '/dashboard/admin', active: true },
+    
+    { header: 'Main Management' },
+    { text: 'Manage ONGs', icon: <Business />, link: '/admin/ongs' },
+    { text: 'Manage Projects', icon: <Folder />, link: '/admin/proyectos' },
+    
+    { header: 'Workforce' },
+    { text: 'Employees', icon: <Badge />, link: '/admin/empleados' },
+    { text: 'Volunteers', icon: <VolunteerActivism />, link: '/admin/voluntarios' },
+    { text: 'Representatives', icon: <SupervisorAccount />, link: '/admin/representantes' },
+    
+    { header: 'Finance & Users' },
+    { text: 'Donors', icon: <Loyalty />, link: '/admin/donantes' },
+    { text: 'Users', icon: <Group />, link: '/admin/usuarios' }, // ¡Ahora este link funcionará!
+    
+    { header: 'System' },
+    { text: 'Reports & Analytics', icon: <Assessment />, link: '/admin/reportes' },
+    { text: 'Audit Logs', icon: <ReceiptLong />, link: '/admin/auditoria' },
+    { text: 'Configuration', icon: <Tune />, link: '/admin/config' },
+];
+
+// --- INITIAL STATE ---
 const initialKpiData = [
     { title: 'PROYECTOS ACTIVOS', value: '...', trend: 'Cargando...', icon: <Folder sx={{ color: primaryColor }} />, trendColor: successColor },
     { title: 'DONACIONES ESTE MES', value: '...', trend: 'Cargando...', icon: <MonetizationOn sx={{ color: successColor }} />, trendColor: successColor },
     { title: 'VOLUNTARIOS ACTIVOS', value: '...', trend: 'Cargando...', icon: <PeopleAlt sx={{ color: successColor }} />, trendColor: successColor },
     { title: 'ONGS REGISTRADAS', value: '...', trend: 'Cargando...', icon: <Business sx={{ color: primaryColor }} />, trendColor: 'text.secondary' },
 ];
-
-// --- STATIC ELEMENTS ---
-const drawerWidth = 280; // Un poco más ancho para acomodar nombres largos
-
-// Nueva estructura del Sidebar según tus requerimientos
-const navItems = [
-    { header: 'General' },
-    { text: 'Dashboard', icon: <DashboardIcon />, link: '/dashboard/admin', active: true },
-    
-    { header: 'Gestión Principal' },
-    { text: 'Manage ONGs', icon: <Business />, link: '/admin/ongs' },
-    { text: 'Manage Projects', icon: <Folder />, link: '/admin/proyectos' },
-    
-    { header: 'Fuerza Laboral' },
-    { text: 'Employees', icon: <Badge />, link: '/admin/empleados' },
-    { text: 'Volunteers', icon: <VolunteerActivism />, link: '/admin/voluntarios' },
-    { text: 'Representatives', icon: <SupervisorAccount />, link: '/admin/representantes' },
-    
-    { header: 'Finanzas & Usuarios' },
-    { text: 'Donors', icon: <Loyalty />, link: '/admin/donantes' },
-    { text: 'Users', icon: <Group />, link: '/admin/usuarios' },
-    
-    { header: 'Sistema' },
-    { text: 'Reports & Analytics', icon: <Assessment />, link: '/admin/reportes' },
-    { text: 'Audit Logs', icon: <ReceiptLong />, link: '/admin/auditoria' },
-    { text: 'Configuration', icon: <Tune />, link: '/admin/config' },
-];
-
 
 export default function AdminDashboard() {
     useRoleProtection('ADMIN'); 
@@ -85,7 +82,6 @@ export default function AdminDashboard() {
         }
     };
 
-    // Helper to calculate progress percentage
     const getProgressValue = (label) => {
         if (label.includes('%')) return parseFloat(label);
         if (label.includes('días restantes')) {
@@ -96,7 +92,7 @@ export default function AdminDashboard() {
         return 0;
     };
 
-    // --- FUNCTION: FETCH DATA FROM DJANGO BACKEND ---
+    // --- FETCH DATA ---
     const fetchDashboardData = async () => {
         const token = localStorage.getItem('token');
         if (!token) { setLoading(false); return; }
@@ -213,7 +209,7 @@ export default function AdminDashboard() {
                         borderRight: 'none', 
                         bgcolor: '#FFFFFF', 
                         p: 2,
-                        '&::-webkit-scrollbar': { display: 'none' } // Hide scrollbar
+                        '&::-webkit-scrollbar': { display: 'none' }
                     },
                 }}
                 variant="permanent"
@@ -224,8 +220,10 @@ export default function AdminDashboard() {
                     <Typography variant="h6" fontWeight={800} color="text.primary">RedRomero</Typography>
                 </Box>
                 
+                {/* MENÚ DINÁMICO CON SECCIONES */}
                 <List>
                     {navItems.map((item, index) => {
+                        // Renderizar Headers de Sección
                         if (item.header) {
                             return (
                                 <Typography key={index} variant="caption" fontWeight={700} color="text.secondary" sx={{ px: 2, mt: 2, mb: 1, display: 'block', textTransform: 'uppercase', fontSize: '0.7rem' }}>
@@ -233,6 +231,7 @@ export default function AdminDashboard() {
                                 </Typography>
                             );
                         }
+                        // Renderizar Botones de Navegación
                         return (
                             <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
                                 <ListItemButton 
@@ -242,7 +241,8 @@ export default function AdminDashboard() {
                                         color: item.active ? primaryColor : '#64748B', 
                                         '&:hover': { bgcolor: '#FFF0EB', color: primaryColor } 
                                     }}
-                                    onClick={() => navigate(item.link)}
+                                    // ACCIÓN DE NAVEGACIÓN CORREGIDA
+                                    onClick={() => item.link && navigate(item.link)}
                                 >
                                     <ListItemIcon sx={{ color: item.active ? primaryColor : '#64748B', minWidth: 40 }}>{item.icon}</ListItemIcon>
                                     <ListItemText 
@@ -278,7 +278,7 @@ export default function AdminDashboard() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
                         <Typography variant="h4" fontWeight={800} color="#1E293B">NGO Management Platform</Typography>
-                        <Typography variant="body2" color="text.secondary">Admin Global Dashboard</Typography>
+                        <Typography variant="body2" color="text.secondary">Admin Global</Typography>
                     </Box>
                     <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, borderRadius: 2, textTransform: 'none', fontWeight: 700, px: 3, py: 1, '&:hover': { bgcolor: '#D93602' } }}>Create Report</Button>
                 </Box>
@@ -299,10 +299,9 @@ export default function AdminDashboard() {
                     ))}
                 </Grid>
 
-                {/* CHARTS */}
+                {/* CHART SECTION (Donation Trends) */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
-                    {/* Donation Trends */}
-                    <Grid item xs={12} md={7}>
+                    <Grid item xs={12}>
                         <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400 }}>
                             <Typography variant="h6" fontWeight={700} mb={2}>📈 Tendencia de Donaciones 2025</Typography>
                             <Box sx={{ height: 300, width: '100%', minHeight: 0 }}>
@@ -320,33 +319,6 @@ export default function AdminDashboard() {
                                         <Tooltip />
                                         <Area type="monotone" dataKey="value" stroke={primaryColor} fillOpacity={1} fill="url(#colorTrend)" strokeWidth={2} />
                                     </AreaChart>
-                                </ResponsiveContainer>
-                            </Box>
-                        </Paper>
-                    </Grid>
-
-                    {/* Project Status (Pie Chart) */}
-                    <Grid item xs={12} md={5}>
-                        <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400 }}>
-                            <Typography variant="h6" fontWeight={700} mb={2}>📊 Estado de Proyectos</Typography>
-                            <Box sx={{ flexGrow: 1, width: '100%', minHeight: 0, position: 'relative' }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie 
-                                            data={chartData.pie} 
-                                            innerRadius={60} 
-                                            outerRadius={100} 
-                                            paddingAngle={5} 
-                                            dataKey="value" 
-                                            nameKey="name" 
-                                            label={(entry) => entry.name}
-                                        >
-                                            {chartData.pie.map((entry, index) => ( 
-                                                <Cell key={`cell-${index}`} fill={entry.color} /> 
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
                                 </ResponsiveContainer>
                             </Box>
                         </Paper>
