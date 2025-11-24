@@ -1,198 +1,189 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from "jwt-decode";
-import axios from 'axios'; 
+import axios from 'axios';
 import { 
     Box, CssBaseline, Drawer, List, Typography, IconButton, 
     Paper, ListItem, ListItemButton, ListItemIcon, ListItemText, 
-    Avatar, InputBase, Button, Grid, Link, Chip, LinearProgress
+    Avatar, InputBase, Button, Chip, 
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    TextField, MenuItem, Switch, Tabs, Tab,
+    CircularProgress // <--- IMPORTANTE: Agregado para el spinner
 } from '@mui/material';
 import { 
     Search, Notifications, Settings, 
-    Dashboard as DashboardIcon, Business, Folder, People, VolunteerActivism, Description,
-    Add, MonetizationOn, PeopleAlt, Visibility, Edit, FileDownload, ArrowBackIos, ArrowForwardIos,
-    // IMPORTANTE: Iconos nuevos para el menú completo
-    Badge, SupervisorAccount, Loyalty, Group, Assessment, ReceiptLong, Tune
+    Dashboard as DashboardIcon, Business, Folder, People, VolunteerActivism,
+    Add, Edit, Close, Badge, SupervisorAccount, Loyalty, Group, Assessment, ReceiptLong, Tune
 } from '@mui/icons-material';
-import { 
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-    PieChart, Pie, Cell 
-} from 'recharts';
-import { useRoleProtection } from '../hooks/useRoleProtection';
 
 // --- STYLE CONSTANTS ---
 const primaryColor = '#FF3F01';
-const successColor = '#10B981';
-const pieColors = ['#10B981', '#FF3F01', '#F59E0B', '#3B82F6']; 
-const drawerWidth = 280; // Ancho ajustado para el menú completo
+const drawerWidth = 280;
 
-// --- MENÚ LATERAL COMPLETO (Sincronizado con UserManagement) ---
+// Sidebar Navigation Items
 const navItems = [
     { header: 'General' },
-    { text: 'Dashboard', icon: <DashboardIcon />, link: '/dashboard/admin', active: true },
-    
-    { header: 'Main Management' },
+    { text: 'Dashboard', icon: <DashboardIcon />, link: '/dashboard/admin' },
+    { header: 'Gestión Principal' },
     { text: 'Manage ONGs', icon: <Business />, link: '/admin/ongs' },
     { text: 'Manage Projects', icon: <Folder />, link: '/admin/proyectos' },
-    
-    { header: 'Workforce' },
+    { header: 'Fuerza Laboral' },
     { text: 'Employees', icon: <Badge />, link: '/admin/empleados' },
     { text: 'Volunteers', icon: <VolunteerActivism />, link: '/admin/voluntarios' },
     { text: 'Representatives', icon: <SupervisorAccount />, link: '/admin/representantes' },
-    
-    { header: 'Finance & Users' },
+    { header: 'Finanzas & Usuarios' },
     { text: 'Donors', icon: <Loyalty />, link: '/admin/donantes' },
-    { text: 'Users', icon: <Group />, link: '/admin/usuarios' }, // ¡Ahora este link funcionará!
-    
-    { header: 'System' },
+    { text: 'Users', icon: <Group />, link: '/admin/usuarios', active: true },
+    { header: 'Sistema' },
     { text: 'Reports & Analytics', icon: <Assessment />, link: '/admin/reportes' },
     { text: 'Audit Logs', icon: <ReceiptLong />, link: '/admin/auditoria' },
     { text: 'Configuration', icon: <Tune />, link: '/admin/config' },
 ];
 
-// --- INITIAL STATE ---
-const initialKpiData = [
-    { title: 'PROYECTOS ACTIVOS', value: '...', trend: 'Cargando...', icon: <Folder sx={{ color: primaryColor }} />, trendColor: successColor },
-    { title: 'DONACIONES ESTE MES', value: '...', trend: 'Cargando...', icon: <MonetizationOn sx={{ color: successColor }} />, trendColor: successColor },
-    { title: 'VOLUNTARIOS ACTIVOS', value: '...', trend: 'Cargando...', icon: <PeopleAlt sx={{ color: successColor }} />, trendColor: successColor },
-    { title: 'ONGS REGISTRADAS', value: '...', trend: 'Cargando...', icon: <Business sx={{ color: primaryColor }} />, trendColor: 'text.secondary' },
-];
+// Roles matching Oracle constraints (uppercase)
+const roles = ['ADMIN', 'EMPLOYEE', 'VOLUNTEER', 'REPRESENTATIVE'];
 
-export default function AdminDashboard() {
-    useRoleProtection('ADMIN'); 
-
+export default function UserManagement() {
     const navigate = useNavigate();
-    const [userData, setUserData] = useState(null);
-    const [userRole, setUserRole] = useState('');
+    const [userInitials] = useState('AD');
     
-    // --- DYNAMIC DATA STATES ---
-    const [kpiData, setKpiData] = useState(initialKpiData);
-    const [projectData, setProjectData] = useState([]);
-    const [chartData, setChartData] = useState({ trends: [], pie: [] });
+    // --- STATE ---
+    const [users, setUsers] = useState([]); 
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [currentTab, setCurrentTab] = useState(0); // 0: All, 1: Admin, etc.
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null); // Object for edit/create
 
-    // Helper to get color based on project state
-    const getStateStyles = (state) => {
-        switch (state) {
-            case 'ACTIVO': return { color: successColor, bgcolor: '#E8F5E9' };
-            case 'REVISIÓN': 
-            case 'PENDIENTE': return { color: '#F59E0B', bgcolor: '#FFFBEB' };
-            case 'COMPLETADO': return { color: '#3B82F6', bgcolor: '#DBEAFE' };
-            default: return { color: '#333333', bgcolor: '#FFFFFF' };
-        }
-    };
+    // --- API CALLS ---
 
-    const getProgressValue = (label) => {
-        if (label.includes('%')) return parseFloat(label);
-        if (label.includes('días restantes')) {
-             const daysRemaining = parseFloat(label);
-             const maxDays = 500; 
-             return Math.max(0, 100 - (daysRemaining / maxDays) * 100);
-        }
-        return 0;
-    };
-
-    // --- FETCH DATA ---
-    const fetchDashboardData = async () => {
+    // Fetch users from backend
+    const fetchUsers = async () => {
         const token = localStorage.getItem('token');
-        if (!token) { setLoading(false); return; }
-
+        if (!token) return;
+        
         try {
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/dashboard-data/', {
+            setLoading(true);
+            const response = await axios.get('http://127.0.0.1:8000/api/admin/users/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-
-            const data = response.data;
-            
-            setKpiData([
-                { 
-                    title: 'PROYECTOS ACTIVOS', 
-                    value: data.active_projects.value, 
-                    trend: data.active_projects.trend, 
-                    icon: <Folder sx={{ color: primaryColor }} />, 
-                    trendColor: data.active_projects.trend.startsWith('+') ? successColor : 'text.secondary' 
-                },
-                { 
-                    title: 'DONACIONES ESTE MES', 
-                    value: `$${data.monthly_donations.value}`, 
-                    trend: data.monthly_donations.trend, 
-                    icon: <MonetizationOn sx={{ color: successColor }} />, 
-                    trendColor: data.monthly_donations.trend.startsWith('+') ? successColor : 'text.secondary' 
-                },
-                { 
-                    title: 'VOLUNTARIOS ACTIVOS', 
-                    value: data.active_volunteers.value, 
-                    trend: data.active_volunteers.trend, 
-                    icon: <PeopleAlt sx={{ color: successColor }} />, 
-                    trendColor: data.active_volunteers.trend.startsWith('+') ? successColor : 'text.secondary' 
-                },
-                { 
-                    title: 'ONGS REGISTRADAS', 
-                    value: data.registered_ngos.value, 
-                    trend: data.registered_ngos.trend, 
-                    icon: <Business sx={{ color: primaryColor }} />, 
-                    trendColor: 'text.secondary' 
-                },
-            ]);
-
-            setProjectData(data.active_projects_table);
-
-            setChartData({
-                trends: data.donation_trends.map(row => ({
-                    name: row.name, 
-                    value: row.value 
-                })),
-                pie: data.project_status_pie.map((item, index) => ({
-                    name: item.name,
-                    value: item.value,
-                    color: pieColors[index % pieColors.length]
-                }))
-            });
-
+            setUsers(response.data); 
         } catch (error) {
-            console.error("Error fetching dashboard data:", error);
-            if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-                localStorage.clear();
-                navigate('/');
-            }
+            console.error("Error fetching users:", error);
+            if (error.response?.status === 401) navigate('/');
         } finally {
             setLoading(false);
         }
     };
 
+    // Load users on mount
     useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    // Create or Update User
+    const handleSaveUser = async () => {
         const token = localStorage.getItem('token');
-        const storedData = localStorage.getItem('user_data');
+        if (!token) return;
 
-        if (!token) { navigate('/'); return; }
-        
-        if (storedData) {
-            try {
-                const parsedData = JSON.parse(storedData);
-                setUserData(parsedData);
-                setUserRole(parsedData.role);
-            } catch (e) { localStorage.clear(); }
+        try {
+            if (currentUser.id) {
+                // UPDATE (PUT)
+                await axios.put('http://127.0.0.1:8000/api/admin/users/update/', currentUser, {
+                   headers: { Authorization: `Bearer ${token}` } 
+                });
+            } else {
+                // CREATE (POST)
+                await axios.post('http://127.0.0.1:8000/api/admin/users/', currentUser, {
+                   headers: { Authorization: `Bearer ${token}` } 
+                });
+            }
+            fetchUsers(); // Refresh list
+            handleCloseDrawer();
+        } catch (error) {
+            console.error("Error saving user:", error);
+            alert("Failed to save user. See console for details.");
         }
-        
-        fetchDashboardData();
-    }, [navigate]);
+    };
 
+    // Toggle Active Status
+    const handleToggleStatus = async (id, currentStatus) => {
+        const token = localStorage.getItem('token');
+        const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+        
+        // Find user object to send full data for update
+        const userToUpdate = users.find(u => u.id === id);
+        if (!userToUpdate) return;
+
+        try {
+             await axios.put('http://127.0.0.1:8000/api/admin/users/update/', { 
+                 ...userToUpdate, 
+                 status: newStatus 
+             }, {
+                headers: { Authorization: `Bearer ${token}` } 
+             });
+             fetchUsers(); // Refresh list
+        } catch (error) {
+            console.error("Error updating status:", error);
+        }
+    };
+
+    // --- HANDLERS ---
+    
     const handleLogout = () => {
         localStorage.clear();
         navigate('/');
     };
 
-    const getUserInitials = () => {
-        return userData?.username ? userData.username.substring(0, 2).toUpperCase() : 'AD';
+    const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
+    const handleTabChange = (event, newValue) => setCurrentTab(newValue);
+
+    const handleOpenDrawer = (user = null) => {
+        // Default role is EMPLOYEE for new users
+        setCurrentUser(user ? { ...user } : { name: '', email: '', role: 'EMPLOYEE', status: 'Active' });
+        setIsDrawerOpen(true);
     };
 
-    if (loading) {
+    const handleCloseDrawer = () => {
+        setIsDrawerOpen(false);
+        setCurrentUser(null);
+    };
+
+    // --- FILTERING LOGIC ---
+    const getFilteredUsers = () => {
+        let filtered = users;
+
+        // Filter by Role Tab
+        if (currentTab !== 0) {
+            const roleMap = { 1: 'ADMIN', 2: 'EMPLOYEE', 3: 'VOLUNTEER', 4: 'REPRESENTATIVE' };
+            filtered = filtered.filter(u => u.role === roleMap[currentTab]);
+        }
+
+        // Filter by Search
+        if (searchTerm) {
+            filtered = filtered.filter(u => 
+                (u.name && u.name.toLowerCase().includes(searchTerm)) || 
+                (u.email && u.email.toLowerCase().includes(searchTerm))
+            );
+        }
+        return filtered;
+    };
+
+    // Helper for Status Chip
+    const getStatusChip = (status) => {
+        const isActive = status === 'Active';
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-                <Typography variant="h5" color={primaryColor}>Cargando datos del dashboard desde Oracle...</Typography>
-            </Box>
+            <Chip 
+                label={status} 
+                size="small" 
+                sx={{ 
+                    bgcolor: isActive ? '#E8F5E9' : '#FFEBEE', 
+                    color: isActive ? '#2E7D32' : '#C62828',
+                    fontWeight: 700,
+                    fontSize: '0.75rem'
+                }} 
+            />
         );
-    }
+    };
 
     return (
         <Box sx={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', bgcolor: '#F8F9FA' }}>
@@ -220,10 +211,8 @@ export default function AdminDashboard() {
                     <Typography variant="h6" fontWeight={800} color="text.primary">RedRomero</Typography>
                 </Box>
                 
-                {/* MENÚ DINÁMICO CON SECCIONES */}
                 <List>
                     {navItems.map((item, index) => {
-                        // Renderizar Headers de Sección
                         if (item.header) {
                             return (
                                 <Typography key={index} variant="caption" fontWeight={700} color="text.secondary" sx={{ px: 2, mt: 2, mb: 1, display: 'block', textTransform: 'uppercase', fontSize: '0.7rem' }}>
@@ -231,7 +220,6 @@ export default function AdminDashboard() {
                                 </Typography>
                             );
                         }
-                        // Renderizar Botones de Navegación
                         return (
                             <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
                                 <ListItemButton 
@@ -241,14 +229,10 @@ export default function AdminDashboard() {
                                         color: item.active ? primaryColor : '#64748B', 
                                         '&:hover': { bgcolor: '#FFF0EB', color: primaryColor } 
                                     }}
-                                    // ACCIÓN DE NAVEGACIÓN CORREGIDA
                                     onClick={() => item.link && navigate(item.link)}
                                 >
                                     <ListItemIcon sx={{ color: item.active ? primaryColor : '#64748B', minWidth: 40 }}>{item.icon}</ListItemIcon>
-                                    <ListItemText 
-                                        primary={item.text} 
-                                        primaryTypographyProps={{ fontWeight: item.active ? 700 : 500, fontSize: '0.9rem' }} 
-                                    />
+                                    <ListItemText primaryTypographyProps={{ fontWeight: item.active ? 700 : 500, fontSize: '0.9rem' }} primary={item.text} />
                                 </ListItemButton>
                             </ListItem>
                         );
@@ -256,148 +240,196 @@ export default function AdminDashboard() {
                 </List>
             </Drawer>
 
-            {/* MAIN CONTENT AREA */}
+            {/* MAIN CONTENT */}
             <Box component="main" sx={{ flexGrow: 1, p: 3, width: `calc(100% - ${drawerWidth}px)`, overflowY: 'auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
                 
                 {/* TOP BAR */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                    <Paper component="form" sx={{ p: '2px 4px', display: 'flex', alignItems: 'center', width: 400, borderRadius: 2, boxShadow: 'none', border: '1px solid #E2E8F0' }}>
-                        <IconButton sx={{ p: '10px' }}><Search /></IconButton>
-                        <InputBase sx={{ ml: 1, flex: 1 }} placeholder="Search NGOs, projects, people..." />
-                    </Paper>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 4 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <IconButton><Notifications /></IconButton>
                         <IconButton><Settings /></IconButton>
-                        <Avatar sx={{ bgcolor: primaryColor, fontWeight: 'bold', cursor: 'pointer', '&:hover': { bgcolor: '#D93602' } }} onClick={handleLogout}>
-                            {getUserInitials()}
+                        <Avatar sx={{ bgcolor: primaryColor, fontWeight: 'bold', cursor: 'pointer' }} onClick={handleLogout}>
+                            {userInitials}
                         </Avatar>
                     </Box>
                 </Box>
 
-                {/* DASHBOARD HEADER */}
+                {/* HEADER & ACTIONS */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
-                        <Typography variant="h4" fontWeight={800} color="#1E293B">NGO Management Platform</Typography>
-                        <Typography variant="body2" color="text.secondary">Admin Global</Typography>
+                        <Typography variant="h4" fontWeight={800} color="#1E293B">User Management</Typography>
+                        <Typography variant="body2" color="text.secondary">Administer user accounts, roles, and permissions.</Typography>
                     </Box>
-                    <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, borderRadius: 2, textTransform: 'none', fontWeight: 700, px: 3, py: 1, '&:hover': { bgcolor: '#D93602' } }}>Create Report</Button>
+                    <Button 
+                        variant="contained" 
+                        startIcon={<Add />} 
+                        onClick={() => handleOpenDrawer()}
+                        sx={{ bgcolor: primaryColor, borderRadius: 2, textTransform: 'none', fontWeight: 700, px: 3, '&:hover': { bgcolor: '#D93602' } }}
+                    >
+                        Create New User
+                    </Button>
                 </Box>
 
-                {/* KPI CARDS */}
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                    {kpiData.map((kpi, i) => (
-                        <Grid item xs={12} sm={6} md={3} key={i}>
-                            <Paper sx={{ p: 3, borderRadius: 2, boxShadow: 'none', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', height: '100%' }}>
-                                <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                                    {kpi.icon}
-                                    <Typography variant="body2" fontWeight={600} color="text.secondary">{kpi.title}</Typography>
-                                </Box>
-                                <Typography variant="h4" fontWeight={800} color="#1E293B" mb={0.5}>{kpi.value}</Typography>
-                                <Typography variant="caption" fontWeight={700} sx={{ color: kpi.trendColor }}>{kpi.trend}</Typography>
-                            </Paper>
-                        </Grid>
-                    ))}
-                </Grid>
-
-                {/* CHART SECTION (Donation Trends) */}
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid item xs={12}>
-                        <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400 }}>
-                            <Typography variant="h6" fontWeight={700} mb={2}>📈 Tendencia de Donaciones 2025</Typography>
-                            <Box sx={{ height: 300, width: '100%', minHeight: 0 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={chartData.trends}>
-                                        <defs>
-                                            <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2={1}>
-                                                <stop offset="5%" stopColor={primaryColor} stopOpacity={0.8}/>
-                                                <stop offset="95%" stopColor={primaryColor} stopOpacity={0}/>
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                                        <YAxis axisLine={false} tickLine={false} />
-                                        <Tooltip />
-                                        <Area type="monotone" dataKey="value" stroke={primaryColor} fillOpacity={1} fill="url(#colorTrend)" strokeWidth={2} />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </Box>
-                        </Paper>
-                    </Grid>
-                </Grid>
-                
-                {/* PROJECTS TABLE */}
-                <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0' }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                        <Typography variant="h5" fontWeight={700} color="#1E293B">Proyectos Activos ({projectData.length})</Typography>
-                        <Box display="flex" gap={1}>
-                            <Button variant="outlined" startIcon={<FileDownload />} sx={{ textTransform: 'none', color: primaryColor, borderColor: primaryColor }}>Exportar CSV</Button>
-                            <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#D93602' }, textTransform: 'none' }}>Nuevo</Button>
-                        </Box>
-                    </Box>
-
-                    <Box display="flex" gap={2} mb={3} alignItems="center">
+                {/* CONTENT CARD */}
+                <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', flexGrow: 1 }}>
+                    
+                    {/* Search & Filters */}
+                    <Box sx={{ mb: 3 }}>
                         <InputBase 
-                            sx={{ p: '5px 10px', flex: 1, border: '1px solid #E2E8F0', borderRadius: 1 }} 
-                            placeholder="Buscar proyecto..." 
+                            sx={{ p: '8px 12px', width: '100%', maxWidth: 400, border: '1px solid #E2E8F0', borderRadius: 2, mb: 3 }} 
+                            placeholder="Search by name or email..." 
+                            value={searchTerm}
+                            onChange={handleSearch}
                             startAdornment={<Search sx={{ mr: 1, color: 'text.secondary' }} />} 
                         />
-                        <select className="MuiInputBase-input" style={{ padding: 8, borderRadius: 4, border: '1px solid #E2E8F0' }}>
-                            <option>Todos</option><option>Activo</option>
-                        </select>
+                        
+                        <Tabs 
+                            value={currentTab} 
+                            onChange={handleTabChange} 
+                            textColor="inherit"
+                            sx={{ 
+                                borderBottom: 1, 
+                                borderColor: 'divider',
+                                '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, color: '#64748B' },
+                                '& .Mui-selected': { color: primaryColor },
+                                '& .MuiTabs-indicator': { backgroundColor: primaryColor }
+                            }}
+                        >
+                            <Tab label="All Roles" />
+                            <Tab label="Admin" />
+                            <Tab label="Project Manager" /> {/* Mapped to Employee/Manager in logic */}
+                            <Tab label="Volunteer" />
+                            <Tab label="Representative" />
+                        </Tabs>
                     </Box>
 
-                    <Grid container spacing={1} sx={{ mb: 1, borderBottom: '2px solid #E2E8F0', fontWeight: 700 }}>
-                        <Grid item xs={0.5}><Typography variant="body2">#</Typography></Grid>
-                        <Grid item xs={3}><Typography variant="body2">Proyecto</Typography></Grid>
-                        <Grid item xs={2.5}><Typography variant="body2">ONG</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2">Estado</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2">Progreso</Typography></Grid>
-                        <Grid item xs={2}><Typography variant="body2">Acciones</Typography></Grid>
-                    </Grid>
-
-                    <List disablePadding>
-                        {projectData.map((project, index) => {
-                            const statusStyle = getStateStyles(project.state.toUpperCase()); 
-                            const progressValue = getProgressValue(project.progressLabel);
-                            return (
-                                <ListItem key={project.id} disablePadding sx={{ py: 1.5, borderBottom: '1px solid #F1F5F9' }}>
-                                    <Grid container spacing={1} alignItems="center">
-                                        <Grid item xs={0.5}><Typography variant="body2">{project.id}</Typography></Grid>
-                                        <Grid item xs={3}><Typography variant="body2" fontWeight={600}>{project.project}</Typography></Grid>
-                                        <Grid item xs={2.5}><Typography variant="body2" color="text.secondary">{project.ngo}</Typography></Grid>
-                                        <Grid item xs={2}>
-                                            <Chip label={project.state} size="small" sx={{ bgcolor: statusStyle.bgcolor, color: statusStyle.color, fontWeight: 700, fontSize: '0.7rem' }} />
-                                        </Grid>
-                                        <Grid item xs={2}>
-                                            <Typography variant="caption" color="text.secondary">{project.progressLabel}</Typography>
-                                            <LinearProgress variant="determinate" value={progressValue} sx={{ height: 5, borderRadius: 2 }} color="success" />
-                                        </Grid>
-                                        <Grid item xs={2}>
-                                            <IconButton size="small" title="Ver"><Visibility fontSize="small" /></IconButton>
-                                            <IconButton size="small" title="Editar"><Edit fontSize="small" /></IconButton>
-                                        </Grid>
-                                    </Grid>
-                                </ListItem>
-                            );
-                        })}
-                    </List>
-
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mt={3}>
-                        <Typography variant="body2" color="text.secondary">Mostrando 1-10 de {projectData.length} (total)</Typography>
-                        <Box display="flex" gap={1}>
-                            <IconButton disabled><ArrowBackIos fontSize="small" /></IconButton>
-                            <Button size="small" variant='contained' sx={{ minWidth: 35, p: 0, bgcolor: primaryColor }}>1</Button>
-                            <IconButton><ArrowForwardIos fontSize="small" /></IconButton>
-                        </Box>
-                    </Box>
+                    {/* USERS TABLE */}
+                    <TableContainer>
+                        <Table sx={{ minWidth: 650 }}>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>User Name</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Email</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Role</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Status</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, color: '#64748B' }} align="right">Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} align="center" sx={{ py: 5 }}>
+                                            <CircularProgress sx={{ color: primaryColor }} />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    getFilteredUsers().map((user) => (
+                                        <TableRow key={user.id} hover>
+                                            <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
+                                                {user.name}
+                                            </TableCell>
+                                            <TableCell sx={{ color: '#64748B' }}>{user.email}</TableCell>
+                                            <TableCell sx={{ color: '#1E293B' }}>{user.role}</TableCell>
+                                            <TableCell>{getStatusChip(user.status)}</TableCell>
+                                            <TableCell align="right">
+                                                {/* Edit Action */}
+                                                <IconButton size="small" onClick={() => handleOpenDrawer(user)}>
+                                                    <Edit fontSize="small" sx={{ color: '#64748B' }} />
+                                                </IconButton>
+                                                {/* Toggle Status Action (Switch) */}
+                                                <Switch 
+                                                    size="small" 
+                                                    checked={user.status === 'Active'} 
+                                                    onChange={() => handleToggleStatus(user.id, user.status)}
+                                                    sx={{ 
+                                                        '& .MuiSwitch-switchBase.Mui-checked': { color: primaryColor },
+                                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: primaryColor },
+                                                    }}
+                                                />
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
                 </Paper>
-
-                <Box sx={{ py: 3, px: 2, mt: 'auto', textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                        {'Copyright © '} <Link color="inherit" href="#">RedRomero</Link> {new Date().getFullYear()} {'. All rights reserved.'}
-                    </Typography>
-                </Box>
             </Box>
+
+            {/* RIGHT DRAWER (CREATE / EDIT USER) */}
+            <Drawer
+                anchor="right"
+                open={isDrawerOpen}
+                onClose={handleCloseDrawer}
+                PaperProps={{ sx: { width: 400, p: 4 } }}
+            >
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+                    <Typography variant="h5" fontWeight={800} color="#1E293B">
+                        {currentUser?.id ? 'Edit User' : 'New User'}
+                    </Typography>
+                    <IconButton onClick={handleCloseDrawer}><Close /></IconButton>
+                </Box>
+
+                <Box component="form" display="flex" flexDirection="column" gap={3}>
+                    <Box>
+                        <Typography variant="caption" fontWeight={700} color="text.secondary" mb={1} display="block">User Name</Typography>
+                        <TextField 
+                            fullWidth 
+                            variant="outlined" 
+                            size="small" 
+                            value={currentUser?.name || ''} 
+                            onChange={(e) => setCurrentUser({...currentUser, name: e.target.value})}
+                        />
+                    </Box>
+
+                    <Box>
+                        <Typography variant="caption" fontWeight={700} color="text.secondary" mb={1} display="block">Email</Typography>
+                        <TextField 
+                            fullWidth 
+                            variant="outlined" 
+                            size="small" 
+                            value={currentUser?.email || ''}
+                            onChange={(e) => setCurrentUser({...currentUser, email: e.target.value})}
+                        />
+                    </Box>
+
+                    <Box>
+                        <Typography variant="caption" fontWeight={700} color="text.secondary" mb={1} display="block">Role</Typography>
+                        <TextField 
+                            select 
+                            fullWidth 
+                            variant="outlined" 
+                            size="small"
+                            value={currentUser?.role || 'EMPLOYEE'}
+                            onChange={(e) => setCurrentUser({...currentUser, role: e.target.value})}
+                        >
+                            {roles.map((role) => (
+                                <MenuItem key={role} value={role}>{role}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Box>
+
+                    <Box display="flex" flexDirection="column" gap={2} mt={4}>
+                        <Button 
+                            variant="contained" 
+                            fullWidth 
+                            onClick={handleSaveUser}
+                            sx={{ bgcolor: primaryColor, py: 1.5, fontWeight: 700, '&:hover': { bgcolor: '#D93602' } }}
+                        >
+                            Save Changes
+                        </Button>
+                        <Button 
+                            variant="outlined" 
+                            fullWidth 
+                            onClick={handleCloseDrawer}
+                            sx={{ color: '#64748B', borderColor: '#E2E8F0', py: 1.5, fontWeight: 700, '&:hover': { borderColor: '#CBD5E1', bgcolor: '#F8F9FA' } }}
+                        >
+                            Cancel
+                        </Button>
+                    </Box>
+                </Box>
+            </Drawer>
+
         </Box>
     );
 }
