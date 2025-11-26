@@ -29,6 +29,7 @@ export default function FundingProgress({ value, total, goal }) {
                 />
                 {/* Center Text */}
                 <Box
+                
                     sx={{
                         top: 0,
                         left: 0,
