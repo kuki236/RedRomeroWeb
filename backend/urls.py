@@ -1,10 +1,10 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from users.serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView as OriginalTokenObtainPairView
 # Import views (Ensure UserManagementView is imported)
-from users.views import AdminDashboardData, UserManagementView 
+from users.views import AdminDashboardData, UserManagementView
 
 # Custom Login View configuration
 class CustomLoginView(OriginalTokenObtainPairView):
@@ -23,4 +23,7 @@ urlpatterns = [
     # --- User Management Endpoints (Listing, Create, Update) ---
     path('api/admin/users/', UserManagementView.as_view(), name='admin_users_list'),
     path('api/admin/users/update/', UserManagementView.as_view(), name='admin_users_update'),
+
+    # ✨ NUEVAS RUTAS DE FINANZAS Y WORKFLOW
+    path('', include('finance.urls')),
 ]
