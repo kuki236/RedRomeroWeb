@@ -14,6 +14,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['user_id'] = self.user.user_id 
         data['username'] = self.user.username
         data['role'] = self.user.user_role
+        print(data)
         return data
 
 # ==============================================================================
@@ -54,3 +55,13 @@ class UserManagementSerializer(serializers.Serializer):
     employee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     volunteer_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     representative_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+
+class UserProfileSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=100, required=False)
+    last_name = serializers.CharField(max_length=100, required=False)
+    email = serializers.EmailField(required=False)
+    password = serializers.CharField(required=False, allow_blank=True)
+    photo = serializers.CharField(required=False, allow_blank=True)
+    
+    phone = serializers.CharField(max_length=20, required=False)
+    address = serializers.CharField(max_length=255, required=False)

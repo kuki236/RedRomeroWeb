@@ -1,146 +1,128 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { 
-    Box, Typography, Grid, Paper, Button, Chip, CircularProgress
+import React, { useState } from 'react';
+import {
+    Box, Typography, Grid, Paper, Button, Chip,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Divider
 } from '@mui/material';
-import { 
-    AssignmentLate, CheckCircle, MonetizationOn, Assignment, 
-    ArrowForward
+import {
+    AssignmentLate, CheckCircle, MonetizationOn, Assignment,
+    ArrowForward, CloudUpload
 } from '@mui/icons-material';
-import { 
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+import {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { useRoleProtection } from '../../hooks/useRoleProtection';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
+
+// IMPORTACIÓN DEL MODAL DE DETALLES
+import ProjectDetailsModal from "../ProjectDetailsModal";
 
 // --- STYLE CONSTANTS ---
 const primaryColor = '#FF3F01';
 const successColor = '#10B981';
 const warningColor = '#F59E0B';
 
+// --- MOCK DATA ---
+const kpiData = [
+    { title: 'Pending Approvals', value: '5', icon: <AssignmentLate sx={{ color: warningColor, fontSize: 30 }} />, bgColor: '#FFFBEB' },
+    { title: 'Approved This Mth', value: '12', icon: <CheckCircle sx={{ color: successColor, fontSize: 30 }} />, bgColor: '#ECFDF5' },
+    { title: 'Budget Managed', value: '$45K', icon: <MonetizationOn sx={{ color: '#F59E0B', fontSize: 30 }} />, bgColor: '#FFF7ED' },
+    { title: 'Projects Active', value: '8', icon: <Assignment sx={{ color: '#3B82F6', fontSize: 30 }} />, bgColor: '#EFF6FF' },
+];
+
+const activityData = [
+    { name: 'JAN', value: 10 }, { name: 'FEB', value: 25 }, { name: 'MAR', value: 18 },
+    { name: 'APR', value: 30 }, { name: 'MAY', value: 20 }, { name: 'JUN', value: 35 },
+    { name: 'JUL', value: 45 }, { name: 'AUG', value: 60 }, { name: 'SEP', value: 50 },
+    { name: 'OCT', value: 40 },
+];
+
+const pendingApprovals = [
+    {
+        id: 1, type: 'URGENT (3 days pending)', title: 'Campaña de Invierno BA 2025',
+        desc: 'ONG: Salud Para Todos | Budget: $25,000 USD', urgent: true
+    },
+    {
+        id: 2, type: '2 days pending', title: 'Cumbre Climática Juvenil NY 2025',
+        desc: 'ONG: Green Planet Initiative | Budget: $35,000 USD', urgent: false
+    },
+    {
+        id: 3, type: '1 day pending', title: 'Huertos Urbanos Madrid 2025',
+        desc: 'ONG: Red de Apoyo Comunitario | Budget: $10,000 USD', urgent: false
+    },
+];
+
+const supervisedProjects = [
+    {
+        id: 1, name: 'Apoyo a Refugiados Madrid 2025', ong: 'Red Apoyo Comunitario',
+        progress: 65, budget: '$25,000', volunteers: 3, lastReport: '2 days ago'
+    },
+    {
+        id: 2, name: 'Centro de Reciclaje NY 2025', ong: 'Green Planet Initiative',
+        progress: 48, budget: '$35,000', volunteers: 2, lastReport: '5 days ago'
+    },
+    {
+        id: 3, name: 'Taller Liderazgo Femenino BA 2025', ong: 'Salud Para Todos',
+        progress: 72, budget: '$15,000', volunteers: 1, lastReport: '1 day ago'
+    },
+];
+
 export default function EmployeeDashboard() {
-    // 1. Security Check
     useRoleProtection('EMPLOYEE');
     const navigate = useNavigate();
 
-    // --- STATE ---
-    const [loading, setLoading] = useState(true);
-    const [kpiStats, setKpiStats] = useState({
-        pending: 0,
-        approvedMonth: 0,
-        budgetManaged: '$0',
-        activeProjects: 0
-    });
-    const [pendingApprovals, setPendingApprovals] = useState([]);
-    const [supervisedProjects, setSupervisedProjects] = useState([]);
-    const [activityData, setActivityData] = useState([]);
+    // --- STATE FOR ADD REPORT DIALOG ---
+    const [openReport, setOpenReport] = useState(false);
+    const [selectedProjectName, setSelectedProjectName] = useState('');
 
-    // --- FETCH DATA ---
-    useEffect(() => {
-        const fetchDashboardData = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+    // --- STATE FOR VIEW DETAILS MODAL ---
+    const [openDetails, setOpenDetails] = useState(false);
+    const [projectDetails, setProjectDetails] = useState(null);
 
-            try {
-                setLoading(true);
+    // Handler Add Report
+    const handleOpenReport = (projectName) => {
+        setSelectedProjectName(projectName);
+        setOpenReport(true);
+    };
 
-                // 1. Obtener Aprobaciones (Workflow Logs)
-                const approvalsRes = await axios.get('http://127.0.0.1:8000/api/audit/logs/?type=approvals', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+    const handleCloseReport = () => {
+        setOpenReport(false);
+        setSelectedProjectName('');
+    };
 
-                // 2. Obtener Proyectos
-                const projectsRes = await axios.get('http://127.0.0.1:8000/api/admin/projects/', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+    // Handler View Details (Enriquece los datos para el modal)
+    const handleViewDetails = (project) => {
+        const fullData = {
+            title: project.name,
+            ong: project.ong,
+            submittedBy: "Employee User", // Mock data
+            date: project.lastReport,
+            totalBudget: project.budget,
+            status: "Active",
+            description: `Comprehensive supervision details for ${project.name}. This project currently has ${project.progress}% completion and engages ${project.volunteers} volunteers active in the field.`,
 
-                // --- PROCESAMIENTO DE DATOS ---
-
-                const allApprovals = approvalsRes.data;
-                const allProjects = projectsRes.data;
-
-                // A. Calcular Pendientes
-                const pendingList = allApprovals.filter(a => a.approval_status === 'PENDIENTE');
-                
-                // B. Calcular Aprobados este mes
-                const currentMonth = new Date().getMonth();
-                const currentYear = new Date().getFullYear();
-                const approvedThisMonth = allApprovals.filter(a => {
-                    const d = new Date(a.approval_date);
-                    return a.approval_status === 'APROBADO' && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-                });
-
-                // C. Proyectos Activos
-                const activeProjs = allProjects.filter(p => p.status === 'Active');
-
-                // D. Gráfico de Actividad (Agrupar aprobaciones por mes)
-                const activityMap = {};
-                allApprovals.forEach(a => {
-                    const date = new Date(a.approval_date);
-                    const key = date.toLocaleString('default', { month: 'short' }); // "Jan", "Feb"
-                    activityMap[key] = (activityMap[key] || 0) + 1;
-                });
-                
-                // Convertir mapa a array para Recharts
-                const chartData = Object.keys(activityMap).map(key => ({
-                    name: key.toUpperCase(),
-                    value: activityMap[key]
-                }));
-
-                // --- ACTUALIZAR ESTADO ---
-                setKpiStats({
-                    pending: pendingList.length,
-                    approvedMonth: approvedThisMonth.length,
-                    budgetManaged: '$45K', // Este dato requeriría un endpoint específico de finanzas, lo dejamos estático o sumamos presupuestos si los tuvieras
-                    activeProjects: activeProjs.length
-                });
-
-                // Formatear lista de pendientes para la vista (Top 3)
-                setPendingApprovals(pendingList.slice(0, 3).map(item => ({
-                    id: item.approval_id,
-                    type: item.days_pending > 5 ? `URGENT (${item.days_pending} days)` : `${item.days_pending} days pending`,
-                    title: item.project_name,
-                    desc: `Status: ${item.approval_status}`,
-                    urgent: item.days_pending > 5
-                })));
-
-                // Formatear lista de proyectos (Top 3)
-                setSupervisedProjects(activeProjs.slice(0, 3).map(p => ({
-                    id: p.project_id,
-                    name: p.name,
-                    ong: `ONG #${p.ong_id}`, // Si tuvieras el nombre de la ONG en el endpoint de proyectos, úsalo aquí
-                    progress: 50, // Dato simulado si no viene del backend
-                    budget: 'N/A',
-                    lastReport: p.start_date
-                })));
-
-                setActivityData(chartData.length > 0 ? chartData : [{name: 'NO DATA', value: 0}]);
-
-            } catch (error) {
-                console.error("Error loading dashboard:", error);
-            } finally {
-                setLoading(false);
-            }
+            // Mock History
+            history: [
+                { status: "Project Assigned", date: "2024-01-10", user: "Manager" },
+                { status: "Budget Approved", date: "2024-01-15", user: "Finance" },
+                { status: "Last Report Filed", date: project.lastReport, user: "Employee User" },
+            ],
+            // Mock Team
+            team: [
+                { name: "Employee User", role: "Supervisor" },
+                { name: "Volunteer Lead", role: "Coordinator" },
+                { name: `Volunteer Team (${project.volunteers})`, role: "Field Support" }
+            ],
+            // Mock Budget Breakdown
+            budget: [
+                { item: "Initial Logistics", date: "2024-02-01", currency: "USD", amount: "5,000" },
+                { item: "Field Operations", date: "2024-03-15", currency: "USD", amount: "8,500" },
+                { item: "Community Aid", date: "2024-04-10", currency: "USD", amount: "4,000" },
+            ]
         };
 
-        fetchDashboardData();
-    }, []);
-
-    // --- KPI ARRAY ---
-    const kpiData = [
-        { title: 'Pending Approvals', value: kpiStats.pending, icon: <AssignmentLate sx={{ color: warningColor, fontSize: 30 }} />, bgColor: '#FFFBEB' },
-        { title: 'Approved This Mth', value: kpiStats.approvedMonth, icon: <CheckCircle sx={{ color: successColor, fontSize: 30 }} />, bgColor: '#ECFDF5' },
-        { title: 'Budget Managed', value: kpiStats.budgetManaged, icon: <MonetizationOn sx={{ color: '#F59E0B', fontSize: 30 }} />, bgColor: '#FFF7ED' },
-        { title: 'Projects Active', value: kpiStats.activeProjects, icon: <Assignment sx={{ color: '#3B82F6', fontSize: 30 }} />, bgColor: '#EFF6FF' },
-    ];
-
-    if (loading) {
-        return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-                <CircularProgress sx={{ color: primaryColor }} />
-            </Box>
-        );
-    }
+        setProjectDetails(fullData);
+        setOpenDetails(true);
+    };
 
     return (
         <Box>
@@ -194,7 +176,7 @@ export default function EmployeeDashboard() {
                     <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid #E2E8F0', height: '100%' }}>
                         <Typography variant="h6" fontWeight={700} color="#1E293B" gutterBottom>Pending Approvals</Typography>
                         <Typography variant="body2" color="error.main" fontWeight={600} mb={3}>Requires Your Action</Typography>
-                        
+
                         <Box display="flex" flexDirection="column" gap={3}>
                             {pendingApprovals.length === 0 ? (
                                 <Typography variant="caption" color="text.secondary">No pending approvals.</Typography>
@@ -223,12 +205,13 @@ export default function EmployeeDashboard() {
                             )}
                         </Box>
 
-                        <Button 
-                            endIcon={<ArrowForward />} 
-                            onClick={() => navigate('/employee/aprobaciones')}
+                        {/* --- NAVIGATION TO APPROVALS --- */}
+                        <Button
+                            endIcon={<ArrowForward />}
                             sx={{ mt: 3, textTransform: 'none', color: primaryColor, fontWeight: 600 }}
+                            onClick={() => navigate("/employee/aprobaciones")}
                         >
-                            View All Approvals
+                            View All (5 pending)
                         </Button>
                     </Paper>
                 </Grid>
@@ -238,40 +221,135 @@ export default function EmployeeDashboard() {
             <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid #E2E8F0' }}>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                     <Typography variant="h6" fontWeight={700} color="#1E293B">My Supervised Projects</Typography>
-                    <Button 
-                        endIcon={<ArrowForward />} 
-                        onClick={() => navigate('/employee/proyectos')}
+
+                    {/* --- NAVIGATION TO PROJECTS (CORREGIDO) --- */}
+                    <Button
+                        endIcon={<ArrowForward />}
                         sx={{ textTransform: 'none', color: primaryColor, fontWeight: 600 }}
+                        onClick={() => navigate("/employee/proyectos")}
                     >
                         View All Projects
                     </Button>
                 </Box>
 
                 <Grid container spacing={2}>
-                    {supervisedProjects.length === 0 ? (
-                        <Grid item xs={12}><Typography color="text.secondary">No active projects found.</Typography></Grid>
-                    ) : (
-                        supervisedProjects.map((project) => (
-                            <Grid item xs={12} key={project.id}>
-                                <Paper elevation={0} sx={{ p: 2, border: '1px solid #F1F5F9', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Box>
-                                        <Typography variant="subtitle1" fontWeight={700} color="#1E293B">{project.name}</Typography>
-                                        <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                                            <Chip label="Active" size="small" sx={{ bgcolor: '#ECFDF5', color: '#10B981', height: 20, fontSize: '0.7rem', fontWeight: 700 }} />
-                                            <Typography variant="caption" color="text.secondary">
-                                                | {project.ong} | Budget: {project.budget} | Started: {project.lastReport}
-                                            </Typography>
-                                        </Box>
+                    {supervisedProjects.map((project) => (
+                        <Grid item xs={12} key={project.id}>
+                            <Paper
+                                elevation={0}
+                                sx={{
+                                    p: 2,
+                                    border: '1px solid #F1F5F9',
+                                    borderRadius: 2,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    flexWrap: 'wrap',
+                                    gap: 2
+                                }}
+                            >
+                                <Box sx={{ flexGrow: 1, minWidth: '250px' }}>
+                                    <Typography variant="subtitle1" fontWeight={700} color="#1E293B">{project.name}</Typography>
+                                    <Box display="flex" alignItems="center" gap={1} mt={0.5} flexWrap="wrap">
+                                        <Chip label="Active" size="small" sx={{ bgcolor: '#ECFDF5', color: '#10B981', height: 20, fontSize: '0.7rem', fontWeight: 700 }} />
+                                        <Typography variant="caption" color="text.secondary">
+                                            | {project.ong} | {project.progress}% Complete
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            | Budget: {project.budget} | {project.volunteers} Volunteers | Last Report: {project.lastReport}
+                                        </Typography>
                                     </Box>
-                                    <Box display="flex" gap={1}>
-                                        <Button variant="outlined" size="small" sx={{ borderColor: '#E2E8F0', color: '#64748B' }}>View</Button>
-                                    </Box>
-                                </Paper>
-                            </Grid>
-                        ))
-                    )}
+                                </Box>
+                                <Box display="flex" gap={1}>
+                                    {/* BOTÓN VIEW IMPLEMENTADO */}
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        sx={{ borderColor: '#E2E8F0', color: '#64748B' }}
+                                        onClick={() => handleViewDetails(project)}
+                                    >
+                                        View
+                                    </Button>
+
+                                    <Button
+                                        variant="contained"
+                                        size="small"
+                                        onClick={() => handleOpenReport(project.name)}
+                                        sx={{ bgcolor: '#FFF0EB', color: primaryColor, boxShadow: 'none', '&:hover': { bgcolor: '#FFDEC8' } }}
+                                    >
+                                        Add Report
+                                    </Button>
+                                </Box>
+                            </Paper>
+                        </Grid>
+                    ))}
                 </Grid>
             </Paper>
+
+            {/* --- DIALOG / POPUP PARA AGREGAR REPORTE --- */}
+            <Dialog
+                open={openReport}
+                onClose={handleCloseReport}
+                fullWidth
+                maxWidth="sm"
+                PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+            >
+                <DialogTitle fontWeight={700}>
+                    Add New Report
+                    {selectedProjectName && <Typography variant="subtitle2" color="text.secondary">For: {selectedProjectName}</Typography>}
+                </DialogTitle>
+                <Divider />
+                <DialogContent>
+                    <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                        <TextField
+                            label="Report Title"
+                            fullWidth
+                            placeholder="Ex: Monthly Progress Update"
+                            variant="outlined"
+                        />
+                        <TextField
+                            label="Description / Impact Summary"
+                            fullWidth
+                            multiline
+                            rows={4}
+                            placeholder="Describe the activities completed..."
+                            variant="outlined"
+                        />
+                        <Box
+                            sx={{
+                                border: '2px dashed #CBD5E1',
+                                borderRadius: 2,
+                                p: 3,
+                                textAlign: 'center',
+                                bgcolor: '#F8FAFC',
+                                cursor: 'pointer',
+                                '&:hover': { borderColor: primaryColor, bgcolor: '#FFF0EB' }
+                            }}
+                        >
+                            <CloudUpload sx={{ fontSize: 40, color: '#94A3B8', mb: 1 }} />
+                            <Typography variant="body2" color="text.secondary">Click to attach documents or photos</Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={handleCloseReport} sx={{ color: '#64748B' }}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleCloseReport}
+                        sx={{ bgcolor: primaryColor, fontWeight: 700, '&:hover': { bgcolor: '#D93602' } }}
+                    >
+                        Submit Report
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* --- NUEVO: PROJECT DETAILS MODAL --- */}
+            <ProjectDetailsModal
+                open={openDetails}
+                onClose={() => setOpenDetails(false)}
+                project={projectDetails}
+            />
+
         </Box>
     );
 }
