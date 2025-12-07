@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from users.serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView as OriginalTokenObtainPairView
@@ -43,6 +43,11 @@ urlpatterns = [
     path('api/admin/users/', UserManagementView.as_view(), name='admin_users_list'),
     path('api/admin/users/update/', UserManagementView.as_view(), name='admin_users_update'),
 
+
+    # --- Employee Management (ESTAS SON LAS QUE TE FALTAN) ---
+    path('api/admin/employees/', EmployeeManagementView.as_view(), name='admin_employees_list'),
+    path('api/admin/employees/update/', EmployeeManagementView.as_view(), name='admin_employees_update'),
+    path('api/admin/employees/<int:pk>/', EmployeeManagementView.as_view(), name='admin_employees_delete'),
 
     path('api/admin/config/', SystemConfigView.as_view(), name='admin_config'),
     path('api/profile/', UserProfileView.as_view(), name='user-profile'),
@@ -96,4 +101,7 @@ urlpatterns = [
     # --- Employee Endpoints ---
     path('api/employee/projects/update/', EmployeeProjectManagementView.as_view(), name='employee_projects_update'),
     path('api/employee/volunteers/assignment/', EmployeeVolunteerAssignmentView.as_view(), name='employee_volunteer_assignment'),
+    
+    # --- FINANCE & WORKFLOW ---
+    path('', include('finance.urls')),
 ]

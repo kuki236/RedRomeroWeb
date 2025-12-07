@@ -3,46 +3,43 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios'; 
 import { 
     Box, Paper, Typography, Button, Grid, Chip, LinearProgress,
-    CircularProgress, IconButton, InputBase, List, ListItem,Link
+    CircularProgress, IconButton, InputBase, Link,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
 import { 
     Folder, Description, Add, MonetizationOn, PeopleAlt, Business,
     Visibility, Edit, FileDownload, ArrowBackIos, ArrowForwardIos, Search
 } from '@mui/icons-material';
 import { 
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-    PieChart, Pie, Cell 
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { useRoleProtection } from '../../hooks/useRoleProtection';
 
 // --- STYLE CONSTANTS ---
 const primaryColor = '#FF3F01';
 const successColor = '#10B981';
-const pieColors = ['#10B981', '#FF3F01', '#F59E0B', '#3B82F6']; 
+const pieColors = ['#10B981', '#FF3F01', '#F59E0B', '#3B82F6', '#8884d8']; 
 
-// --- INITIAL STATE ---
 const initialKpiData = [
     { title: 'ACTIVE PROJECTS', value: '...', trend: '...', icon: <Folder sx={{ color: primaryColor }} />, trendColor: successColor },
     { title: 'DONATIONS THIS MONTH', value: '...', trend: '...', icon: <MonetizationOn sx={{ color: successColor }} />, trendColor: successColor },
     { title: 'ACTIVE VOLUNTEERS', value: '...', trend: '...', icon: <PeopleAlt sx={{ color: successColor }} />, trendColor: successColor },
-    { title: 'REGISTERED NGOS', value: '...', trend: '...', icon: <Business sx={{ color: primaryColor }} />, trendColor: 'text.secondary' },
+    { title: 'REGISTERED NGOs', value: '...', trend: '...', icon: <Business sx={{ color: primaryColor }} />, trendColor: 'text.secondary' },
 ];
 
 export default function AdminDashboard() {
-    // 1. Security Check
     useRoleProtection('ADMIN'); 
-
     const navigate = useNavigate();
     
-    // 2. State Management
     const [kpiData, setKpiData] = useState(initialKpiData);
     const [projectData, setProjectData] = useState([]);
-    const [chartData, setChartData] = useState({ trends: [], pie: [] });
+    const [chartData, setChartData] = useState({ trends: [], pie: [], totalProjects: 0 });
     const [loading, setLoading] = useState(true);
 
     // --- HELPERS ---
     const getStateStyles = (state) => {
-        switch (state) {
+        const safeState = state ? state.toUpperCase() : '';
+        switch (safeState) {
             case 'ACTIVO': return { color: successColor, bgcolor: '#E8F5E9' };
             case 'REVISIÓN': 
             case 'PENDIENTE': return { color: '#F59E0B', bgcolor: '#FFFBEB' };
@@ -52,6 +49,7 @@ export default function AdminDashboard() {
     };
 
     const getProgressValue = (label) => {
+        if (!label) return 0;
         if (label.includes('%')) return parseFloat(label);
         if (label.includes('días restantes')) {
              const daysRemaining = parseFloat(label);
@@ -73,7 +71,6 @@ export default function AdminDashboard() {
 
             const data = response.data;
             
-            // Update KPIs
             setKpiData([
                 { 
                     title: 'ACTIVE PROJECTS', 
@@ -97,7 +94,7 @@ export default function AdminDashboard() {
                     trendColor: data.active_volunteers.trend.startsWith('+') ? successColor : 'text.secondary' 
                 },
                 { 
-                    title: 'REGISTERED NGOS', 
+                    title: 'REGISTERED NGOs', 
                     value: data.registered_ngos.value, 
                     trend: data.registered_ngos.trend, 
                     icon: <Business sx={{ color: primaryColor }} />, 
@@ -105,20 +102,30 @@ export default function AdminDashboard() {
                 },
             ]);
 
-            // Update Table
-            setProjectData(data.active_projects_table);
+            setProjectData(data.active_projects_table || []);
 
-            // Update Charts
+            // --- Cálculos para el estado de proyectos ---
+            const pieRaw = Array.isArray(data.project_status_pie) ? data.project_status_pie : [];
+            const totalPie = pieRaw.reduce((acc, curr) => acc + (parseFloat(curr.value) || 0), 0);
+
+            const processedPie = pieRaw.map((item, index) => {
+                const val = parseFloat(item.value) || 0;
+                const percent = totalPie > 0 ? ((val / totalPie) * 100).toFixed(0) : 0;
+                return {
+                    name: item.name, 
+                    percentLabel: `${percent}%`,
+                    value: val,
+                    color: pieColors[index % pieColors.length]
+                };
+            });
+
             setChartData({
-                trends: data.donation_trends.map(row => ({
+                trends: Array.isArray(data.donation_trends) ? data.donation_trends.map(row => ({
                     name: row.name, 
                     value: row.value 
-                })),
-                pie: data.project_status_pie.map((item, index) => ({
-                    name: item.name,
-                    value: item.value,
-                    color: pieColors[index % pieColors.length]
-                }))
+                })) : [],
+                pie: processedPie,
+                totalProjects: totalPie
             });
 
         } catch (error) {
@@ -136,7 +143,6 @@ export default function AdminDashboard() {
         fetchDashboardData();
     }, []);
 
-    // --- LOADING VIEW ---
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -145,16 +151,17 @@ export default function AdminDashboard() {
         );
     }
 
-    // --- MAIN VIEW ---
     return (
         <Box>
-            {/* HEADER & ACTIONS */}
+            {/* HEADER */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                 <Box>
                     <Typography variant="h4" fontWeight={800} color="#1E293B">Dashboard Overview</Typography>
                     <Typography variant="body2" color="text.secondary">Welcome back, Admin</Typography>
                 </Box>
-                <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, borderRadius: 2, textTransform: 'none', fontWeight: 700, px: 3, py: 1, '&:hover': { bgcolor: '#D93602' } }}>Create Report</Button>
+                <Button onClick={() => navigate('/admin/reportes')} variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, borderRadius: 2, fontWeight: 700, px: 3, py: 1, '&:hover': { bgcolor: '#D93602' } }}>
+                    Create Report
+                </Button>
             </Box>
 
             {/* KPI CARDS */}
@@ -175,11 +182,12 @@ export default function AdminDashboard() {
 
             {/* CHARTS SECTION */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
-                {/* Donation Trends */}
-                <Grid item xs={12} md={7}>
-                    <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400 }}>
-                        <Typography variant="h6" fontWeight={700} mb={2}>📈 Tendencia de Donaciones 2025</Typography>
-                        <Box sx={{ height: 300, width: '100%', minHeight: 0 }}>
+                
+                {/* 1. Donation Trends */}
+                <Grid item xs={12} md={8}>
+                    <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400, display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="h6" fontWeight={700} mb={2}>📈 Donation Trends 2025</Typography>
+                        <Box sx={{ flexGrow: 1, width: '100%', minHeight: 0 }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData.trends}>
                                     <defs>
@@ -199,29 +207,40 @@ export default function AdminDashboard() {
                     </Paper>
                 </Grid>
 
-                {/* Project Status Pie */}
-                <Grid item xs={12} md={5}>
-                    <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400 }}>
-                        <Typography variant="h6" fontWeight={700} mb={2}>📊 Estado de Proyectos</Typography>
-                        <Box sx={{ flexGrow: 1, width: '100%', minHeight: 0, position: 'relative' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie 
-                                        data={chartData.pie} 
-                                        innerRadius={60} 
-                                        outerRadius={100} 
-                                        paddingAngle={5} 
-                                        dataKey="value" 
-                                        nameKey="name" 
-                                        label={(entry) => entry.name}
-                                    >
-                                        {chartData.pie.map((entry, index) => ( 
-                                            <Cell key={`cell-${index}`} fill={entry.color} /> 
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                </PieChart>
-                            </ResponsiveContainer>
+                {/* 2. Projects by Status (LIMPIO - SIN CIRCULO) */}
+                <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400, display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="h6" fontWeight={700} mb={2}>Project Status</Typography>
+                        
+                        {/* Contenido Central: Total */}
+                        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                             <Typography variant="h6" color="text.secondary" fontWeight={600} gutterBottom>
+                                Total
+                             </Typography>
+                             <Typography variant="h1" fontWeight={800} color="#1E293B" sx={{ fontSize: '4.5rem' }}>
+                                {chartData.totalProjects}
+                             </Typography>
+                        </Box>
+
+                        {/* Leyenda Personalizada al Pie */}
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', mt: 2 }}>
+                            {chartData.pie.length > 0 ? (
+                                chartData.pie.map((item, index) => (
+                                    <Box key={index} display="flex" flexDirection="column" alignItems="center">
+                                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                                            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: item.color }} />
+                                            <Typography variant="body2" fontWeight={700} color="#1E293B">
+                                                {item.name}
+                                            </Typography>
+                                        </Box>
+                                        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                             {item.percentLabel}
+                                        </Typography>
+                                    </Box>
+                                ))
+                            ) : (
+                                <Typography color="text.secondary">No hay datos</Typography>
+                            )}
                         </Box>
                     </Paper>
                 </Grid>
@@ -232,8 +251,8 @@ export default function AdminDashboard() {
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                     <Typography variant="h5" fontWeight={700} color="#1E293B">Active Projects ({projectData.length})</Typography>
                     <Box display="flex" gap={1}>
-                        <Button variant="outlined" startIcon={<FileDownload />} sx={{ textTransform: 'none', color: primaryColor, borderColor: primaryColor }}>Export CSV</Button>
-                        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#D93602' }, textTransform: 'none' }}>New</Button>
+                        <Button variant="outlined" startIcon={<FileDownload />} sx={{ textTransform: 'none', color: primaryColor, borderColor: primaryColor }}>Exportar CSV</Button>
+                        <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/projects')} sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#D93602' }, textTransform: 'none' }}>Nuevo</Button>
                     </Box>
                 </Box>
 
@@ -246,50 +265,57 @@ export default function AdminDashboard() {
                     <Button size="small" variant="outlined" sx={{ color: 'text.secondary', borderColor: '#E2E8F0' }}>Filtros</Button>
                 </Box>
 
-                <Grid container spacing={1} sx={{ mb: 1, borderBottom: '2px solid #E2E8F0', fontWeight: 700 }}>
-                    <Grid item xs={0.5}><Typography variant="body2">#</Typography></Grid>
-                    <Grid item xs={3}><Typography variant="body2">Proyecto</Typography></Grid>
-                    <Grid item xs={2.5}><Typography variant="body2">ONG</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="body2">Estado</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="body2">Progreso</Typography></Grid>
-                    <Grid item xs={2}><Typography variant="body2">Acciones</Typography></Grid>
-                </Grid>
-
-                <List disablePadding>
-                    {projectData.map((project, index) => {
-                        const statusStyle = getStateStyles(project.state.toUpperCase()); 
-                        const progressValue = getProgressValue(project.progressLabel);
-                        return (
-                            <ListItem key={project.id} disablePadding sx={{ py: 1.5, borderBottom: '1px solid #F1F5F9' }}>
-                                <Grid container spacing={1} alignItems="center">
-                                    <Grid item xs={0.5}><Typography variant="body2">{project.id}</Typography></Grid>
-                                    <Grid item xs={3}><Typography variant="body2" fontWeight={600}>{project.project}</Typography></Grid>
-                                    <Grid item xs={2.5}><Typography variant="body2" color="text.secondary">{project.ngo}</Typography></Grid>
-                                    <Grid item xs={2}>
-                                        <Chip label={project.state} size="small" sx={{ bgcolor: statusStyle.bgcolor, color: statusStyle.color, fontWeight: 700, fontSize: '0.7rem' }} />
-                                    </Grid>
-                                    <Grid item xs={2}>
-                                        <Typography variant="caption" color="text.secondary">{project.progressLabel}</Typography>
-                                        <LinearProgress variant="determinate" value={progressValue} sx={{ height: 5, borderRadius: 2 }} color="success" />
-                                    </Grid>
-                                    <Grid item xs={2}>
-                                        <IconButton size="small" title="Ver"><Visibility fontSize="small" /></IconButton>
-                                        <IconButton size="small" title="Editar"><Edit fontSize="small" /></IconButton>
-                                    </Grid>
-                                </Grid>
-                            </ListItem>
-                        );
-                    })}
-                </List>
-
-                <Box display="flex" justifyContent="space-between" alignItems="center" mt={3}>
-                    <Typography variant="body2" color="text.secondary">Mostrando 1-10 de {projectData.length} (total)</Typography>
-                    <Box display="flex" gap={1}>
-                        <IconButton disabled><ArrowBackIos fontSize="small" /></IconButton>
-                        <Button size="small" variant='contained' sx={{ minWidth: 35, p: 0, bgcolor: primaryColor }}>1</Button>
-                        <IconButton><ArrowForwardIos fontSize="small" /></IconButton>
-                    </Box>
-                </Box>
+                <TableContainer>
+                    <Table sx={{ minWidth: 650 }}>
+                        <TableHead>
+                            <TableRow sx={{ borderBottom: '2px solid #E2E8F0' }}>
+                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>#</TableCell>
+                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Proyecto</TableCell>
+                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>ONG</TableCell>
+                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Estado</TableCell>
+                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Progreso</TableCell>
+                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Acciones</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {projectData.length > 0 ? (
+                                projectData.map((project, index) => {
+                                    const statusStyle = getStateStyles(project.state); 
+                                    const progressValue = getProgressValue(project.progressLabel);
+                                    return (
+                                        <TableRow key={project.id || index} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                            <TableCell component="th" scope="row">{project.id}</TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight={600}>{project.project}</Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" color="text.secondary">{project.ngo}</Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip label={project.state} size="small" sx={{ bgcolor: statusStyle.bgcolor, color: statusStyle.color, fontWeight: 700, fontSize: '0.7rem' }} />
+                                            </TableCell>
+                                            <TableCell sx={{ minWidth: 150 }}>
+                                                <Box>
+                                                    <Typography variant="caption" color="text.secondary">{project.progressLabel}</Typography>
+                                                    <LinearProgress variant="determinate" value={progressValue} sx={{ height: 6, borderRadius: 3, mt: 0.5 }} color="success" />
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Box display="flex">
+                                                    <IconButton size="small"><Visibility fontSize="small" /></IconButton>
+                                                </Box>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={6} align="center">No hay proyectos para mostrar.</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
             </Paper>
 
             <Box sx={{ py: 3, px: 2, mt: 'auto', textAlign: 'center' }}>

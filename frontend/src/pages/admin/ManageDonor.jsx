@@ -37,10 +37,11 @@ export default function DonorManagement() {
         if (!token) return;
         try {
             setLoading(true);
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/donors/', {
+            // CAMBIO 1: Actualizar URL
+            const response = await axios.get('http://127.0.0.1:8000/api/finance/donors/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setDonors(response.data); 
+            setDonors(response.data);
         } catch (error) {
             console.error("Error fetching donors:", error);
         } finally {
@@ -52,9 +53,14 @@ export default function DonorManagement() {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/donor-types/', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            //setLoading(true);
+            // CAMBIO 1: Actualizar URL
+            const response = await axios.get(
+              "http://127.0.0.1:8000/api/finance/donor-types/",
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
             setDonorTypes(response.data);
         } catch (error) {
             console.error("Error fetching donor types:", error);
@@ -71,22 +77,22 @@ export default function DonorManagement() {
         if (!token) return;
 
         try {
+            const payload = {
+                donor_id: formData.donor_id, // Necesario para update
+                name: formData.name,
+                email: formData.email,
+                phone: formData.phone,
+                type_id: formData.type_id || 1
+            };
             if (formData.donor_id) {
-                // UPDATE
-                await axios.put('http://127.0.0.1:8000/api/admin/donors/update/', {
-                    donor_id: formData.donor_id,
-                    name: formData.name,
-                    email: formData.email,
-                    phone: formData.phone,
-                    type_id: formData.type_id,
-                    status: formData.status
-                }, {
+                // UPDATE: Corregida la URL y el método
+                await axios.put('http://127.0.0.1:8000/api/finance/donors/', payload, {
                    headers: { Authorization: `Bearer ${token}` } 
                 });
             } else {
                 // CREATE
-                await axios.post('http://127.0.0.1:8000/api/admin/donors/', formData, {
-                   headers: { Authorization: `Bearer ${token}` } 
+                await axios.post('http://127.0.0.1:8000/api/finance/donors/', payload, {
+                    headers: { Authorization: `Bearer ${token}` } 
                 });
             }
             fetchDonors(); 
@@ -189,7 +195,6 @@ export default function DonorManagement() {
 
     return (
         <Box>
-            {/* PAGE HEADER */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                 <Box>
                     <Typography variant="h4" fontWeight={800} color="#1E293B">Donor Management</Typography>
@@ -205,10 +210,7 @@ export default function DonorManagement() {
                 </Button>
             </Box>
 
-            {/* CONTENT CARD */}
             <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0' }}>
-                
-                {/* Search */}
                 <Box sx={{ mb: 3 }}>
                     <InputBase 
                         sx={{ p: '8px 12px', width: '100%', maxWidth: 400, border: '1px solid #E2E8F0', borderRadius: 2, mb: 3 }} 
@@ -219,7 +221,6 @@ export default function DonorManagement() {
                     />
                 </Box>
                 
-                {/* TABLE */}
                 <TableContainer>
                     <Table sx={{ minWidth: 650 }}>
                         <TableHead>
@@ -242,25 +243,34 @@ export default function DonorManagement() {
                             ) : (
                                 getFilteredDonors().map((donor) => (
                                     <TableRow key={donor.donor_id} hover>
-                                        <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
-                                            {donor.name}
-                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>{donor.name}</TableCell>
                                         <TableCell sx={{ color: '#64748B' }}>{donor.email || '-'}</TableCell>
                                         <TableCell sx={{ color: '#64748B' }}>{donor.phone || '-'}</TableCell>
-                                        <TableCell sx={{ color: '#64748B' }}>{getDonorTypeName(donor.type_id)}</TableCell>
-                                        <TableCell>{getStatusChip(donor.status)}</TableCell>
+                                        
+                                        {/* CORRECCIÓN: Usamos donor.type_name directo del backend */}
+                                        <TableCell sx={{ color: '#64748B' }}>{donor.type_name || '-'}</TableCell>
+                                        
+                                        <TableCell>
+                                            <Chip 
+                                                label={donor.status} 
+                                                size="small" 
+                                                sx={{ 
+                                                    bgcolor: donor.status === 'Active' ? '#E8F5E9' : '#FFEBEE', 
+                                                    color: donor.status === 'Active' ? '#2E7D32' : '#C62828',
+                                                    fontWeight: 700,
+                                                    fontSize: '0.75rem'
+                                                }} 
+                                            />
+                                        </TableCell>
                                         <TableCell align="right">
                                             <IconButton size="small" onClick={() => handleOpenDrawer(donor)}>
                                                 <Edit fontSize="small" sx={{ color: '#64748B' }} />
                                             </IconButton>
+                                            {/* Desactivado el Switch porque no hay columna de estado en BD */}
                                             <Switch 
                                                 size="small" 
+                                                disabled 
                                                 checked={donor.status === 'Active'} 
-                                                onChange={() => handleToggleStatus(donor.donor_id, donor.status)}
-                                                sx={{ 
-                                                    '& .MuiSwitch-switchBase.Mui-checked': { color: primaryColor },
-                                                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: primaryColor },
-                                                }}
                                             />
                                         </TableCell>
                                     </TableRow>
@@ -271,7 +281,6 @@ export default function DonorManagement() {
                 </TableContainer>
             </Paper>
 
-            {/* DYNAMIC DRAWER (FORM) */}
             <Drawer anchor="right" open={isDrawerOpen} onClose={handleCloseDrawer} PaperProps={{ sx: { width: 450, p: 4 } }}>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
                     <Typography variant="h5" fontWeight={800} color="#1E293B">{formData.donor_id ? 'Edit Donor' : 'New Donor'}</Typography>
@@ -279,10 +288,7 @@ export default function DonorManagement() {
                 </Box>
                 
                 <Box component="form" display="flex" flexDirection="column" gap={2.5}>
-                    
-                    {/* SECTION 1: BASIC INFORMATION */}
                     <Typography variant="subtitle2" color="primary" fontWeight={700}>Basic Information</Typography>
-                    
                     <Grid container spacing={2}>
                         <Grid item xs={12}>
                             <Typography variant="caption" fontWeight={700} color="text.secondary">Donor Name</Typography>
@@ -291,38 +297,21 @@ export default function DonorManagement() {
                         <Grid item xs={12}>
                             <Typography variant="caption" fontWeight={700} color="text.secondary">Donor Type</Typography>
                             <TextField 
-                                select 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                name="type_id" 
-                                value={formData.type_id} 
-                                onChange={handleChange}
+                                select fullWidth variant="outlined" size="small" 
+                                name="type_id" value={formData.type_id} onChange={handleChange}
                             >
                                 {donorTypes.map((type) => (
-                                    <MenuItem key={type.type_id} value={type.type_id}>
-                                        {type.name}
-                                    </MenuItem>
+                                    <MenuItem key={type.type_id} value={type.type_id}>{type.name}</MenuItem>
                                 ))}
                             </TextField>
                         </Grid>
                     </Grid>
 
-                    {/* SECTION 2: CONTACT INFORMATION */}
                     <Typography variant="subtitle2" color="primary" fontWeight={700} sx={{ mt: 1 }}>Contact Information</Typography>
-                    
                     <Grid container spacing={2}>
                         <Grid item xs={12}>
                             <Typography variant="caption" fontWeight={700} color="text.secondary">Email (Optional)</Typography>
-                            <TextField 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                type="email" 
-                                name="email" 
-                                value={formData.email} 
-                                onChange={handleChange}
-                            />
+                            <TextField fullWidth variant="outlined" size="small" type="email" name="email" value={formData.email} onChange={handleChange} />
                         </Grid>
                         <Grid item xs={12}>
                             <Typography variant="caption" fontWeight={700} color="text.secondary">Phone (Optional)</Typography>

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from 'axios';
 import {
   Box,
   Typography,
@@ -14,29 +15,48 @@ import {
   TableCell,
   TableContainer,
   Switch,
+  CircularProgress // Importante importar esto
 } from "@mui/material";
 
 export default function DonationsByProject() {
-  const [project, setProject] = useState("");
-  const [range, setRange] = useState("");
-  const [usd, setUsd] = useState(true);
+  // --- ESTADOS (Faltaban estos) ---
+  const [project, setProject] = useState(""); // Filtro de proyecto
+  const [range, setRange] = useState("");     // Filtro de rango de fecha
+  const [usd, setUsd] = useState(false);      // Toggle de moneda
 
-  const rows = [
-    {
-      donor: "John Smith",
-      project: "Water Wells Initiative",
-      date: "2024-10-12",
-      original: "$500",
-      usd: "$500",
-    },
-    {
-      donor: "Ana Torres",
-      project: "Community Garden Program",
-      date: "2024-09-30",
-      original: "€300",
-      usd: "$318",
-    },
-  ];
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // --- CARGA DE DATOS ---
+  useEffect(() => {
+    fetchDonations();
+  }, []);
+
+  const fetchDonations = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      setLoading(true);
+      const response = await axios.get('http://127.0.0.1:8000/api/finance/donations/', {
+          headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const formattedData = response.data.map(item => ({
+          id: item.donation_id,
+          donor: item.donor_name,
+          project: item.project_name,
+          date: item.donation_date, 
+          // Si tu vista devuelve 'currency', úsalo, si no, pon un default
+          original: `${item.currency || '$'} ${item.amount}`,
+          usd: `$${item.amount}` 
+      }));
+      
+      setRows(formattedData);
+    } catch (error) {
+      console.error("Error fetching donations:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -56,7 +76,7 @@ export default function DonationsByProject() {
         }}
       >
         {/* Project Filter */}
-        <FormControl sx={{ minWidth: 200 }}>
+        <FormControl sx={{ minWidth: 200 }} size="small">
           <InputLabel>Filter by Project</InputLabel>
           <Select
             value={project}
@@ -64,13 +84,14 @@ export default function DonationsByProject() {
             onChange={(e) => setProject(e.target.value)}
           >
             <MenuItem value="">All</MenuItem>
+            {/* Aquí podrías mapear dinámicamente los proyectos si quisieras */}
             <MenuItem value="water">Water Wells Initiative</MenuItem>
             <MenuItem value="garden">Community Garden Program</MenuItem>
           </Select>
         </FormControl>
 
         {/* Date Range */}
-        <FormControl sx={{ minWidth: 200 }}>
+        <FormControl sx={{ minWidth: 200 }} size="small">
           <InputLabel>Date Range</InputLabel>
           <Select
             value={range}
@@ -105,15 +126,29 @@ export default function DonationsByProject() {
           </TableHead>
 
           <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={i}>
-                <TableCell>{r.donor}</TableCell>
-                <TableCell>{r.project}</TableCell>
-                <TableCell>{r.date}</TableCell>
-                <TableCell>{r.original}</TableCell>
-                <TableCell>{r.usd}</TableCell>
-              </TableRow>
-            ))}
+            {loading ? (
+                <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                        <CircularProgress />
+                    </TableCell>
+                </TableRow>
+            ) : rows.length === 0 ? (
+                <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                        No donations found.
+                    </TableCell>
+                </TableRow>
+            ) : (
+                rows.map((r, i) => (
+                  <TableRow key={i} hover>
+                    <TableCell>{r.donor}</TableCell>
+                    <TableCell>{r.project}</TableCell>
+                    <TableCell>{new Date(r.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{r.original}</TableCell>
+                    <TableCell>{r.usd}</TableCell>
+                  </TableRow>
+                ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
