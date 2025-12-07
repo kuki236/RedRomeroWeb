@@ -493,10 +493,10 @@ class UserProfileView(APIView):
                         role
                     ])
 
-            return Response({"message": "Perfil actualizado exitosamente"}, status=status.HTTP_200_OK)
+            return Response({"message": "Profile updated successfully"}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": "Error de base de datos: " + str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "Database error: " + str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class AuditLogView(APIView):
 
     def get(self, request):
@@ -741,4 +741,858 @@ class ReportsAnalyticsView(APIView):
             return Response(data, status=status.HTTP_200_OK)
 
         except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ==============================================================================
+# WORKFORCE & OPERATIONS VIEWS
+# ==============================================================================
+
+# --- NGO MANAGEMENT ---
+
+class NGOListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """List all NGOs."""
+        try:
+            sql = "SELECT ong_id, name, registration_number, country, city, address, contact_email, phone, 'Active' as status FROM NGO ORDER BY name"
+            ngos = fetch_raw_query(sql)
+            return Response(ngos, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching NGOs: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Create new NGO using PKG_WORKFORCE.create_ngo."""
+        data = request.data
+        try:
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_WORKFORCE.create_ngo', [
+                    data.get('name'),
+                    data.get('registration_number'),
+                    data.get('country'),
+                    data.get('contact_email'),
+                    out_id
+                ])
+                
+                # Update city and address if provided
+                if data.get('city') or data.get('address') or data.get('phone'):
+                    cursor.execute(
+                        "UPDATE NGO SET city = %s, address = %s, phone = %s WHERE ong_id = %s",
+                        [data.get('city', ''), data.get('address', ''), data.get('phone', ''), out_id.getvalue()]
+                    )
+                
+                native_cursor.close()
+                return Response({"message": "NGO created successfully", "ong_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating NGO: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class NGOUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        """Update NGO."""
+        data = request.data
+        ong_id = data.get('ong_id')
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE NGO SET name = %s, registration_number = %s, country = %s, 
+                       city = %s, address = %s, contact_email = %s, phone = %s 
+                       WHERE ong_id = %s""",
+                    [
+                        data.get('name'),
+                        data.get('registration_number'),
+                        data.get('country'),
+                        data.get('city', ''),
+                        data.get('address', ''),
+                        data.get('contact_email'),
+                        data.get('phone', ''),
+                        ong_id
+                    ]
+                )
+            return Response({"message": "NGO updated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error updating NGO: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request):
+        """Soft delete NGO using PKG_WORKFORCE.delete_ngo."""
+        ong_id = request.query_params.get('ong_id')
+        if not ong_id:
+            return Response({"error": "ong_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_WORKFORCE.delete_ngo', [int(ong_id)])
+            return Response({"message": "NGO deleted successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error deleting NGO: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- EMPLOYEE MANAGEMENT ---
+
+class EmployeeListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """List all employees."""
+        try:
+            sql = """SELECT employee_id, first_name, last_name, birth_date, address, 
+                     email, phone, hire_date FROM Employee ORDER BY hire_date DESC"""
+            employees = fetch_raw_query(sql)
+            return Response(employees, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching employees: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Create new employee using PKG_WORKFORCE.create_employee."""
+        data = request.data
+        try:
+            from datetime import datetime
+            birth_date = datetime.strptime(data.get('birth_date'), '%Y-%m-%d').date() if data.get('birth_date') else None
+            hire_date = datetime.strptime(data.get('hire_date'), '%Y-%m-%d').date() if data.get('hire_date') else None
+            
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_WORKFORCE.create_employee', [
+                    data.get('first_name'),
+                    data.get('last_name'),
+                    birth_date,
+                    data.get('address', ''),
+                    data.get('email'),
+                    data.get('phone', ''),
+                    hire_date,
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Employee created successfully", "employee_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating employee: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class EmployeeUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        """Update employee using PKG_WORKFORCE.update_employee."""
+        data = request.data
+        employee_id = data.get('employee_id')
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_WORKFORCE.update_employee', [
+                    employee_id,
+                    data.get('first_name'),
+                    data.get('last_name'),
+                    data.get('email'),
+                    data.get('phone', '')
+                ])
+                # Update address if provided
+                if data.get('address'):
+                    cursor.execute("UPDATE Employee SET address = %s WHERE employee_id = %s", [data.get('address'), employee_id])
+            return Response({"message": "Employee updated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error updating employee: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, employee_id):
+        """Delete employee using PKG_WORKFORCE.delete_employee."""
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_WORKFORCE.delete_employee', [employee_id])
+            return Response({"message": "Employee deleted successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error deleting employee: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- VOLUNTEER MANAGEMENT ---
+
+class VolunteerListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """List all volunteers."""
+        try:
+            sql = """SELECT volunteer_id, first_name, last_name, birth_date, address, 
+                     email, phone, 'Active' as status FROM Volunteer ORDER BY last_name, first_name"""
+            volunteers = fetch_raw_query(sql)
+            return Response(volunteers, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching volunteers: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Create new volunteer using PKG_WORKFORCE.create_volunteer."""
+        data = request.data
+        try:
+            from datetime import datetime
+            birth_date = datetime.strptime(data.get('birth_date'), '%Y-%m-%d').date() if data.get('birth_date') else None
+            
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_WORKFORCE.create_volunteer', [
+                    data.get('first_name'),
+                    data.get('last_name'),
+                    birth_date,
+                    data.get('address', ''),
+                    data.get('email'),
+                    data.get('phone', ''),
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Volunteer created successfully", "volunteer_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating volunteer: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class VolunteerUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        """Update volunteer using PKG_WORKFORCE.update_volunteer."""
+        data = request.data
+        volunteer_id = data.get('volunteer_id')
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_WORKFORCE.update_volunteer', [
+                    volunteer_id,
+                    data.get('first_name'),
+                    data.get('last_name'),
+                    data.get('email'),
+                    data.get('phone', '')
+                ])
+                # Update address if provided
+                if data.get('address'):
+                    cursor.execute("UPDATE Volunteer SET address = %s WHERE volunteer_id = %s", [data.get('address'), volunteer_id])
+                # Update status if provided
+                if data.get('status'):
+                    cursor.execute("UPDATE Volunteer SET status = %s WHERE volunteer_id = %s", [data.get('status'), volunteer_id])
+            return Response({"message": "Volunteer updated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error updating volunteer: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, volunteer_id=None):
+        """Delete volunteer using PKG_WORKFORCE.delete_volunteer."""
+        # Get volunteer_id from URL parameter or request body
+        volunteer_id = volunteer_id or request.query_params.get('volunteer_id') or request.data.get('volunteer_id')
+        if not volunteer_id:
+            return Response({"error": "volunteer_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_WORKFORCE.delete_volunteer', [int(volunteer_id)])
+            return Response({"message": "Volunteer deleted successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error deleting volunteer: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class VolunteerSpecialtyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Assign specialty to volunteer using PKG_WORKFORCE.add_volunteer_specialty."""
+        data = request.data
+        try:
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_WORKFORCE.add_volunteer_specialty', [
+                    data.get('volunteer_id'),
+                    data.get('specialty_id'),
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Specialty assigned successfully", "assignment_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error assigning specialty: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        """Get volunteer specialties."""
+        volunteer_id = request.query_params.get('volunteer_id')
+        if not volunteer_id:
+            return Response({"error": "volunteer_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            sql = """SELECT vs.assignment_id, vs.specialty_id, s.specialty_name, s.description, vs.assignment_date
+                     FROM Volunteer_Specialty vs
+                     JOIN Specialty s ON vs.specialty_id = s.specialty_id
+                     WHERE vs.volunteer_id = %s
+                     ORDER BY vs.assignment_date DESC"""
+            specialties = fetch_raw_query(sql, [volunteer_id])
+            return Response(specialties, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching volunteer specialties: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- REPRESENTATIVE MANAGEMENT ---
+
+class RepresentativeListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """List all representatives."""
+        try:
+            sql = """SELECT r.representative_id, r.first_name, r.last_name, r.birth_date, 
+                     r.address, r.email, r.phone, r.ong_id, n.name as ngo_name, 'Active' as status
+                     FROM Representative r
+                     JOIN NGO n ON r.ong_id = n.ong_id
+                     ORDER BY r.last_name, r.first_name"""
+            representatives = fetch_raw_query(sql)
+            return Response(representatives, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching representatives: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Create new representative using PKG_WORKFORCE.create_representative."""
+        data = request.data
+        try:
+            from datetime import datetime
+            birth_date = datetime.strptime(data.get('birth_date'), '%Y-%m-%d').date() if data.get('birth_date') else None
+            
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_WORKFORCE.create_representative', [
+                    data.get('first_name'),
+                    data.get('last_name'),
+                    birth_date,
+                    data.get('address', ''),
+                    data.get('email'),
+                    data.get('phone', ''),
+                    data.get('ong_id'),
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Representative created successfully", "representative_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating representative: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class RepresentativeUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        """Update representative."""
+        data = request.data
+        representative_id = data.get('representative_id')
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE Representative SET first_name = %s, last_name = %s, 
+                       address = %s, email = %s, phone = %s, ong_id = %s
+                       WHERE representative_id = %s""",
+                    [
+                        data.get('first_name'),
+                        data.get('last_name'),
+                        data.get('address', ''),
+                        data.get('email'),
+                        data.get('phone', ''),
+                        data.get('ong_id'),
+                        representative_id
+                    ]
+                )
+            return Response({"message": "Representative updated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error updating representative: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- PROJECT MANAGEMENT ---
+
+class ProjectListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """List all projects."""
+        try:
+            sql = """SELECT p.project_id, p.name, p.description, p.start_date, p.end_date,
+                     p.project_status_id, ps.status_name, p.ong_id, n.name as ngo_name,
+                     p.representative_id, r.first_name || ' ' || r.last_name as representative_name,
+                     pc.category_id, pc.category_name,
+                     'Active' as status
+                     FROM Project p
+                     JOIN Project_Status ps ON p.project_status_id = ps.project_status_id
+                     JOIN NGO n ON p.ong_id = n.ong_id
+                     JOIN Representative r ON p.representative_id = r.representative_id
+                     LEFT JOIN (
+                         SELECT pca.project_id, pca.category_id, c.category_name,
+                                ROW_NUMBER() OVER (PARTITION BY pca.project_id ORDER BY pca.is_primary DESC, pca.assignment_date) as rn
+                         FROM Project_Category_Assignment pca
+                         JOIN Project_Category c ON pca.category_id = c.category_id
+                     ) pc ON p.project_id = pc.project_id AND pc.rn = 1
+                     ORDER BY p.start_date DESC"""
+            projects = fetch_raw_query(sql)
+            return Response(projects, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching projects: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Create new project using PKG_PROJECT_MGMT.create_project."""
+        data = request.data
+        try:
+            from datetime import datetime
+            start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date() if data.get('start_date') else None
+            end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date() if data.get('end_date') else None
+            
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_PROJECT_MGMT.create_project', [
+                    data.get('name'),
+                    data.get('description', ''),
+                    start_date,
+                    end_date,
+                    data.get('project_status_id'),
+                    data.get('ong_id'),
+                    data.get('representative_id'),
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Project created successfully", "project_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating project: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ProjectUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        """Update project using PKG_PROJECT_MGMT.update_project_details."""
+        data = request.data
+        project_id = data.get('project_id')
+        if not project_id:
+            return Response({"error": "project_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from datetime import datetime
+            start_date = None
+            end_date = None
+            
+            # Parse dates if provided
+            if data.get('start_date'):
+                try:
+                    start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date()
+                except ValueError:
+                    logger.warning(f"Invalid start_date format: {data.get('start_date')}")
+            
+            if data.get('end_date'):
+                try:
+                    end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date()
+                except ValueError:
+                    logger.warning(f"Invalid end_date format: {data.get('end_date')}")
+            
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_PROJECT_MGMT.update_project_details', [
+                    project_id,
+                    data.get('name'),
+                    data.get('description', ''),
+                    start_date,
+                    end_date,
+                    data.get('project_status_id'),
+                    data.get('ong_id'),
+                    data.get('representative_id')
+                ])
+            return Response({"message": "Project updated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error updating project: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ProjectCloseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Close project using PKG_PROJECT_MGMT.close_project."""
+        project_id = request.data.get('project_id')
+        if not project_id:
+            return Response({"error": "project_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_PROJECT_MGMT.close_project', [project_id])
+            return Response({"message": "Project closed successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error closing project: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ProjectReactivateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Reactivate project using PKG_PROJECT_MGMT.reactivate_project."""
+        project_id = request.data.get('project_id')
+        if not project_id:
+            return Response({"error": "project_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_PROJECT_MGMT.reactivate_project', [project_id])
+            return Response({"message": "Project reactivated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error reactivating project: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- ASSIGNMENTS ---
+
+class VolunteerProjectAssignmentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Assign volunteer to project using PKG_WORKFORCE.assign_volunteer_to_project."""
+        data = request.data
+        try:
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_WORKFORCE.assign_volunteer_to_project', [
+                    data.get('project_id'),
+                    data.get('volunteer_id'),
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Volunteer assigned successfully", "assignment_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error assigning volunteer: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ProjectCategoryAssignmentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Assign category to project."""
+        data = request.data
+        user = request.user
+        try:
+            with connection.cursor() as cursor:
+                # Check if assignment already exists
+                check_sql = "SELECT COUNT(*) as cnt FROM Project_Category_Assignment WHERE project_id = %s AND category_id = %s"
+                cursor.execute(check_sql, [data.get('project_id'), data.get('category_id')])
+                result = cursor.fetchone()
+                if result and result[0] > 0:
+                    return Response({"error": "Category already assigned to this project"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Insert category assignment
+                insert_sql = """
+                    INSERT INTO Project_Category_Assignment (project_id, category_id, is_primary, assigned_by_user_id)
+                    VALUES (%s, %s, %s, %s)
+                """
+                cursor.execute(insert_sql, [
+                    data.get('project_id'),
+                    data.get('category_id'),
+                    data.get('is_primary', 'N'),
+                    user.user_id
+                ])
+                return Response({"message": "Category assigned successfully"}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error assigning category: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ProjectSDGAssignmentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Assign SDG to project using PKG_PROJECT_MGMT.assign_sdg."""
+        data = request.data
+        user = request.user
+        try:
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_PROJECT_MGMT.assign_sdg', [
+                    data.get('project_id'),
+                    data.get('sdg_id'),
+                    data.get('contribution_level', 'MEDIO'),
+                    user.user_id,
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "SDG assigned successfully", "project_sdg_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error assigning SDG: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- VIEWS EXPOSURE ---
+
+class VolunteerExpertiseMappingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get volunteer expertise mapping from vw_volunteer_expertise_mapping."""
+        try:
+            sql = "SELECT * FROM vw_volunteer_expertise_mapping ORDER BY volunteer_name"
+            data = fetch_raw_query(sql)
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching volunteer expertise: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class EmployeeWorkloadAnalysisView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get employee workload analysis from vw_employee_workload_analysis."""
+        try:
+            sql = "SELECT * FROM vw_employee_workload_analysis ORDER BY employee_name"
+            data = fetch_raw_query(sql)
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching employee workload: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- VOLUNTEER ENDPOINTS ---
+
+class VolunteerMyProjectsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get projects assigned to the logged-in volunteer."""
+        user = request.user
+        if user.user_role != 'VOLUNTEER' or not user.volunteer_id:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            sql = """SELECT * FROM vw_volunteer_project_assignments 
+                     WHERE volunteer_id = %s 
+                     ORDER BY assignment_date DESC"""
+            projects = fetch_raw_query(sql, [user.volunteer_id])
+            return Response(projects, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching volunteer projects: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class VolunteerMySpecialtiesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get specialties of the logged-in volunteer."""
+        user = request.user
+        if user.user_role != 'VOLUNTEER' or not user.volunteer_id:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            sql = """SELECT vs.assignment_id, vs.specialty_id, s.specialty_name, s.description, vs.assignment_date
+                     FROM Volunteer_Specialty vs
+                     JOIN Specialty s ON vs.specialty_id = s.specialty_id
+                     WHERE vs.volunteer_id = %s
+                     ORDER BY vs.assignment_date DESC"""
+            specialties = fetch_raw_query(sql, [user.volunteer_id])
+            return Response(specialties, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching volunteer specialties: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class VolunteerExploreProjectsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get available projects for volunteers to apply (vw_available_projects_for_volunteers)."""
+        try:
+            sql = "SELECT * FROM vw_available_projects_for_volunteers"
+            projects = fetch_raw_query(sql)
+            return Response(projects, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching available projects: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- REPRESENTATIVE ENDPOINTS ---
+
+class RepresentativeMyProjectsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get projects of the logged-in representative."""
+        user = request.user
+        if user.user_role != 'REPRESENTATIVE' or not user.representative_id:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            sql = """SELECT p.project_id, p.name, p.description, p.start_date, p.end_date,
+                     ps.status_name, n.name as ngo_name
+                     FROM Project p
+                     JOIN Project_Status ps ON p.project_status_id = ps.project_status_id
+                     JOIN NGO n ON p.ong_id = n.ong_id
+                     WHERE p.representative_id = %s
+                     ORDER BY p.start_date DESC"""
+            projects = fetch_raw_query(sql, [user.representative_id])
+            return Response(projects, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching representative projects: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Create project draft for representative."""
+        user = request.user
+        if user.user_role != 'REPRESENTATIVE' or not user.representative_id:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        data = request.data
+        try:
+            from datetime import datetime
+            start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date() if data.get('start_date') else None
+            end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date() if data.get('end_date') else None
+            
+            # Get NGO ID from representative
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT ong_id FROM Representative WHERE representative_id = %s", [user.representative_id])
+                row = cursor.fetchone()
+                if not row:
+                    return Response({"error": "Representative not found"}, status=status.HTTP_404_NOT_FOUND)
+                ong_id = row[0]
+                
+                # Get PLANIFICACION status ID
+                cursor.execute("SELECT project_status_id FROM Project_Status WHERE status_name = 'PLANIFICACION'")
+                row = cursor.fetchone()
+                if not row:
+                    return Response({"error": "Project status not found"}, status=status.HTTP_404_NOT_FOUND)
+                status_id = row[0]
+                
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_PROJECT_MGMT.create_project', [
+                    data.get('name'),
+                    data.get('description', ''),
+                    start_date,
+                    end_date,
+                    status_id,
+                    ong_id,
+                    user.representative_id,
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Project draft created successfully", "project_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating project draft: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class RepresentativeMyNGOView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get NGO information for the logged-in representative."""
+        user = request.user
+        if user.user_role != 'REPRESENTATIVE' or not user.representative_id:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            sql = """SELECT n.ong_id, n.name, n.registration_number, n.country, n.city, 
+                     n.address, n.contact_email, n.phone
+                     FROM NGO n
+                     JOIN Representative r ON n.ong_id = r.ong_id
+                     WHERE r.representative_id = %s"""
+            ngo = fetch_raw_query(sql, [user.representative_id])
+            if ngo:
+                return Response(ngo[0], status=status.HTTP_200_OK)
+            return Response({"error": "NGO not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error fetching NGO info: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- EMPLOYEE ENDPOINTS ---
+
+class EmployeeProjectManagementView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        """Update project details (for employees)."""
+        data = request.data
+        project_id = data.get('project_id')
+        try:
+            from datetime import datetime
+            start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date() if data.get('start_date') else None
+            end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date() if data.get('end_date') else None
+            
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_PROJECT_MGMT.update_project_details', [
+                    project_id,
+                    data.get('name'),
+                    data.get('description', ''),
+                    start_date,
+                    end_date,
+                    data.get('project_status_id'),
+                    data.get('ong_id'),
+                    data.get('representative_id')
+                ])
+            return Response({"message": "Project updated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error updating project: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class EmployeeVolunteerAssignmentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get volunteers with their specialties for assignment."""
+        specialty_id = request.query_params.get('specialty_id')
+        try:
+            if specialty_id:
+                sql = """SELECT v.volunteer_id, v.first_name, v.last_name, v.email, v.phone,
+                         s.specialty_name, vs.assignment_date
+                         FROM Volunteer v
+                         JOIN Volunteer_Specialty vs ON v.volunteer_id = vs.volunteer_id
+                         JOIN Specialty s ON vs.specialty_id = s.specialty_id
+                         WHERE s.specialty_id = %s
+                         ORDER BY v.last_name, v.first_name"""
+                volunteers = fetch_raw_query(sql, [specialty_id])
+            else:
+                sql = """SELECT v.volunteer_id, v.first_name, v.last_name, v.email, v.phone,
+                         LISTAGG(s.specialty_name, ', ') WITHIN GROUP (ORDER BY s.specialty_name) as specialties
+                         FROM Volunteer v
+                         LEFT JOIN Volunteer_Specialty vs ON v.volunteer_id = vs.volunteer_id
+                         LEFT JOIN Specialty s ON vs.specialty_id = s.specialty_id
+                         GROUP BY v.volunteer_id, v.first_name, v.last_name, v.email, v.phone
+                         ORDER BY v.last_name, v.first_name"""
+                volunteers = fetch_raw_query(sql)
+            return Response(volunteers, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching volunteers: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Assign volunteer to project (for employees)."""
+        data = request.data
+        try:
+            with connection.cursor() as cursor:
+                native_conn = connection.connection
+                native_cursor = native_conn.cursor()
+                out_id = native_cursor.var(oracledb.NUMBER)
+                
+                native_cursor.callproc('PKG_WORKFORCE.assign_volunteer_to_project', [
+                    data.get('project_id'),
+                    data.get('volunteer_id'),
+                    out_id
+                ])
+                native_cursor.close()
+                return Response({"message": "Volunteer assigned successfully", "assignment_id": out_id.getvalue()}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error assigning volunteer: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- PROJECT STATUS ENDPOINT ---
+
+class ProjectStatusListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """List all project statuses."""
+        try:
+            sql = "SELECT project_status_id as id, status_name as name FROM Project_Status ORDER BY project_status_id"
+            statuses = fetch_raw_query(sql)
+            return Response(statuses, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching project statuses: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

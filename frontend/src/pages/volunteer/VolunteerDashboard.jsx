@@ -24,9 +24,9 @@ const kpiData = [
 ];
 
 const specialties = [
-    { name: 'Medicina General', desc: 'Primary & emergency care' },
-    { name: 'Ingeniería Civil', desc: 'Infrastructure projects' },
-    { name: 'Gestión de Proyectos', desc: 'Coordination & admin' },
+    { name: 'General Medicine', desc: 'Primary & emergency care' },
+    { name: 'Civil Engineering', desc: 'Infrastructure projects' },
+    { name: 'Project Management', desc: 'Coordination & admin' },
 ];
 
 const contributionData = [
@@ -43,7 +43,7 @@ const opportunities = [
         org: 'Salud sin Fronteras',
         location: 'Antioquia, Colombia',
         match: 95,
-        tags: { specialty: 'Medicina General', start: 'Oct 15, 2024', duration: '2 Weeks', team: '12 Volunteers' },
+        tags: { specialty: 'General Medicine', start: 'Oct 15, 2024', duration: '2 Weeks', team: '12 Volunteers' },
         isNew: true
     },
     {
@@ -52,7 +52,7 @@ const opportunities = [
         org: 'Constructores del Futuro',
         location: 'Cusco, Perú',
         match: 88,
-        tags: { specialty: 'Ingeniería Civil', start: 'Nov 01, 2024', duration: '4 Weeks', team: '8 Volunteers' },
+        tags: { specialty: 'Civil Engineering', start: 'Nov 01, 2024', duration: '4 Weeks', team: '8 Volunteers' },
         isNew: false
     }
 ];

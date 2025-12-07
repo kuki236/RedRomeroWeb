@@ -65,3 +65,78 @@ class UserProfileSerializer(serializers.Serializer):
     
     phone = serializers.CharField(max_length=20, required=False)
     address = serializers.CharField(max_length=255, required=False)
+
+# ==============================================================================
+# 4. Workforce & Operations Serializers
+# ==============================================================================
+
+class NGOSerializer(serializers.Serializer):
+    ong_id = serializers.IntegerField(read_only=True)
+    name = serializers.CharField(max_length=100, required=True)
+    registration_number = serializers.CharField(max_length=100, required=True)
+    country = serializers.CharField(max_length=50, required=True)
+    city = serializers.CharField(max_length=50, required=True)
+    address = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    contact_email = serializers.EmailField(required=True)
+    phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    status = serializers.CharField(read_only=True)
+
+class EmployeeSerializer(serializers.Serializer):
+    employee_id = serializers.IntegerField(read_only=True)
+    first_name = serializers.CharField(max_length=100, required=True)
+    last_name = serializers.CharField(max_length=100, required=True)
+    birth_date = serializers.DateField(required=True)
+    address = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    email = serializers.EmailField(required=True)
+    phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    hire_date = serializers.DateField(required=True)
+
+class VolunteerSerializer(serializers.Serializer):
+    volunteer_id = serializers.IntegerField(read_only=True)
+    first_name = serializers.CharField(max_length=100, required=True)
+    last_name = serializers.CharField(max_length=100, required=True)
+    birth_date = serializers.DateField(required=True)
+    address = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    email = serializers.EmailField(required=True)
+    phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    status = serializers.CharField(read_only=True)
+
+class RepresentativeSerializer(serializers.Serializer):
+    representative_id = serializers.IntegerField(read_only=True)
+    first_name = serializers.CharField(max_length=100, required=True)
+    last_name = serializers.CharField(max_length=100, required=True)
+    birth_date = serializers.DateField(required=True)
+    address = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    email = serializers.EmailField(required=True)
+    phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    ong_id = serializers.IntegerField(required=True)
+    status = serializers.CharField(read_only=True)
+
+class ProjectSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField(read_only=True)
+    name = serializers.CharField(max_length=100, required=True)
+    description = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+    start_date = serializers.DateField(required=True)
+    end_date = serializers.DateField(required=False, allow_null=True)
+    project_status_id = serializers.IntegerField(required=True)
+    ong_id = serializers.IntegerField(required=True)
+    representative_id = serializers.IntegerField(required=True)
+    status = serializers.CharField(read_only=True)
+
+class SpecialtySerializer(serializers.Serializer):
+    specialty_id = serializers.IntegerField(read_only=True)
+    specialty_name = serializers.CharField(max_length=100, required=True)
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+class VolunteerSpecialtyAssignmentSerializer(serializers.Serializer):
+    volunteer_id = serializers.IntegerField(required=True)
+    specialty_id = serializers.IntegerField(required=True)
+
+class VolunteerProjectAssignmentSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField(required=True)
+    volunteer_id = serializers.IntegerField(required=True)
+
+class ProjectSDGAssignmentSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField(required=True)
+    sdg_id = serializers.IntegerField(required=True)
+    contribution_level = serializers.CharField(max_length=20, default='MEDIO')

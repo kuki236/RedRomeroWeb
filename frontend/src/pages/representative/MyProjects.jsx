@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
     Box,
     Typography,
@@ -35,47 +36,48 @@ export default function MyProjects() {
     const [selectedProject, setSelectedProject] = useState(null);
 
     useEffect(() => {
-        // He enriquecido un poco los datos mock para que el modal se vea bien
-        setProjects([
-            {
-                id: 1,
-                name: "Water Well Construction",
-                status: "planning",
-                start: "2025-01-10",
-                end: "2025-06-20",
-                progress: 20,
-                // Datos extra para el modal
-                raised: "$2,000",
-                goal: "$10,000",
-                volunteers: "5 / 15",
-                timeline: "Jan 2025 - Jun 2025"
-            },
-            {
-                id: 2,
-                name: "Community School Program",
-                status: "in progress",
-                start: "2024-08-01",
-                end: "2025-02-15",
-                progress: 65,
-                raised: "$15,000",
-                goal: "$20,000",
-                volunteers: "12 / 12",
-                timeline: "Aug 2024 - Feb 2025"
-            },
-            {
-                id: 3,
-                name: "Food Aid Expansion",
-                status: "completed",
-                start: "2024-01-12",
-                end: "2024-11-30",
-                progress: 100,
-                raised: "$50,000",
-                goal: "$50,000",
-                volunteers: "30 / 30",
-                timeline: "Jan 2024 - Nov 2024"
-            },
-        ]);
+        const fetchProjects = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const response = await axios.get('http://127.0.0.1:8000/api/representative/my-projects/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                // Transform data
+                const transformed = response.data.map(p => ({
+                    id: p.project_id,
+                    name: p.name,
+                    status: p.status_name?.toLowerCase() || 'planning',
+                    start: p.start_date?.split('T')[0] || '',
+                    end: p.end_date?.split('T')[0] || '',
+                    progress: 0, // Calculate if needed
+                    raised: '$0',
+                    goal: '$0',
+                    volunteers: 'N/A',
+                    timeline: `${p.start_date?.split('T')[0] || ''} - ${p.end_date?.split('T')[0] || 'Ongoing'}`
+                }));
+                setProjects(transformed);
+            } catch (error) {
+                console.error("Error fetching projects:", error);
+            }
+        };
+        fetchProjects();
     }, []);
+
+    const handleCreateProject = async (projectData) => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            await axios.post('http://127.0.0.1:8000/api/representative/my-projects/', projectData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            // Refresh projects list
+            window.location.reload();
+        } catch (error) {
+            console.error("Error creating project:", error);
+            alert("Failed to create project. Check console for details.");
+        }
+    };
 
     const statusColors = {
         planning: { bg: "#FFF3CD", color: "#B58400" },

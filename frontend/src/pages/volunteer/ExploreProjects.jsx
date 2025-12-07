@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import axios from 'axios';
 import {
     Box,
     Typography,
@@ -11,7 +12,8 @@ import {
     MenuItem,
     Select,
     FormControl,
-    InputLabel
+    InputLabel,
+    CircularProgress
 } from '@mui/material';
 import {
     ArrowForward,
@@ -23,77 +25,47 @@ import {
 // --- IMPORTAR EL MODAL ---
 import ProjectDetailsModal from "../ProjectDetailsModal";
 
-// --- MOCK DATA ---
-const projectsData = [
-    {
-        id: 1,
-        name: "Clean Water for Cusco Highlands",
-        ngo: "AquaVida Peru",
-        location: "Cusco, Peru",
-        date: "2025-01-10", // Fecha para ordenar
-        description: "Installing water filtration systems in 5 remote communities to provide safe drinking water.",
-        image: "https://images.unsplash.com/photo-1581056771107-24ca5f033842?auto=format&fit=crop&q=80&w=300&h=300",
-        tags: ["Infrastructure", "Water"],
-        status: "Recruiting",
-        raised: "$8,500",
-        goal: "$12,000",
-        percent: 70,
-        timeline: "Mar 2025 - Jun 2025",
-        volunteers: "5 / 15"
-    },
-    {
-        id: 2,
-        name: "Digital Literacy for Rural Schools",
-        ngo: "Tech for All",
-        location: "Oaxaca, Mexico",
-        date: "2025-02-15",
-        description: "Setting up computer labs and teaching basic coding and internet skills to primary school children.",
-        image: "https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&q=80&w=300&h=300",
-        tags: ["Education", "Technology"],
-        status: "Active",
-        raised: "$15,000",
-        goal: "$15,000",
-        percent: 100,
-        timeline: "Jan 2025 - Dec 2025",
-        volunteers: "10 / 10"
-    },
-    {
-        id: 3,
-        name: "Reforestation of the Amazon Border",
-        ngo: "Green Earth Alliance",
-        location: "Leticia, Colombia",
-        date: "2024-12-05",
-        description: "Join us in planting 5,000 native trees to restore degraded land and protect local biodiversity.",
-        image: "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=300&h=300",
-        tags: ["Environment"],
-        status: "Planning",
-        raised: "$2,000",
-        goal: "$25,000",
-        percent: 8,
-        timeline: "Aug 2025 - Nov 2025",
-        volunteers: "0 / 50"
-    },
-    {
-        id: 4,
-        name: "Mobile Health Clinic 2025",
-        ngo: "Medicos Sin Fronteras Local",
-        location: "La Paz, Bolivia",
-        date: "2025-03-01",
-        description: "A travelling medical unit providing basic checkups and vaccinations to underserved villages.",
-        image: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=300&h=300",
-        tags: ["Health", "Medical"],
-        status: "Recruiting",
-        raised: "$45,000",
-        goal: "$60,000",
-        percent: 75,
-        timeline: "Feb 2025 - May 2025",
-        volunteers: "12 / 20"
-    }
-];
-
 export default function ExploreProjects() {
     const [searchTerm, setSearchTerm] = useState("");
-    const [sortBy, setSortBy] = useState("date"); // 'date', 'name', 'location'
+    const [sortBy, setSortBy] = useState("date");
+    const [projectsData, setProjectsData] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProjects = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                setLoading(true);
+                const response = await axios.get('http://127.0.0.1:8000/api/volunteer/explore-projects/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                // Transform data to match component format
+                const transformed = response.data.map(p => ({
+                    id: p.project_id,
+                    name: p.project_name,
+                    ngo: p.ngo_name || 'N/A',
+                    location: `${p.city || ''}, ${p.country || ''}`.trim() || 'N/A',
+                    date: p.start_date ? p.start_date.split('T')[0] : new Date().toISOString().split('T')[0],
+                    description: p.description || 'No description available.',
+                    image: "https://images.unsplash.com/photo-1581056771107-24ca5f033842?auto=format&fit=crop&q=80&w=300&h=300",
+                    tags: p.categories ? p.categories.split(', ') : [],
+                    status: p.status_name || 'Active',
+                    raised: '$0',
+                    goal: '$0',
+                    percent: 0,
+                    timeline: `${p.start_date?.split('T')[0] || ''} - ${p.end_date?.split('T')[0] || 'Ongoing'}`,
+                    volunteers: `${p.current_volunteers || 0} / N/A`
+                }));
+                setProjectsData(transformed);
+            } catch (error) {
+                console.error("Error fetching projects:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProjects();
+    }, []);
 
     // --- ESTADOS PARA EL MODAL ---
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -131,7 +103,7 @@ export default function ExploreProjects() {
         });
 
         return result;
-    }, [searchTerm, sortBy]);
+    }, [searchTerm, sortBy, projectsData]);
 
     return (
         <Container maxWidth="lg" sx={{ py: 5 }}>
@@ -189,8 +161,13 @@ export default function ExploreProjects() {
             </Paper>
 
             {/* --- PROJECTS LIST --- */}
-            <Box display="flex" flexDirection="column" gap={3}>
-                {filteredAndSortedProjects.map((project) => (
+            {loading ? (
+                <Box display="flex" justifyContent="center" p={5}>
+                    <CircularProgress sx={{ color: '#FF3F01' }} />
+                </Box>
+            ) : (
+                <Box display="flex" flexDirection="column" gap={3}>
+                    {filteredAndSortedProjects.map((project) => (
                     <Paper
                         key={project.id}
                         elevation={0}
@@ -326,6 +303,7 @@ export default function ExploreProjects() {
                     </Paper>
                 ))}
             </Box>
+            )}
 
             {/* --- MODAL DE DETALLES --- */}
             <ProjectDetailsModal

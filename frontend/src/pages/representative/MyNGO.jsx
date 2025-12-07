@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import axios from "axios";
 import {
     Box,
     Typography,
@@ -24,57 +25,41 @@ export default function MyNGO() {
     const [ngo, setNgo] = useState(null);
 
     useEffect(() => {
-        // MOCK DATA
-        setNgo({
-            name: "Global Relief Initiative",
-            city: "Lima",
-            country: "Peru",
-            memberSince: "2020-04-15",
-            icon: <AccountBalanceIcon sx={{ fontSize: 60, color: "#FF3F01" }} />,
-
-            overview: {
-                totalProjects: 42,
-                active: 12,
-                completed: 28,
-                totalRaised: "$540,000",
-                successRate: "87%",
-            },
-
-            contact: {
-                address: "Av. Los Héroes 123, Lima, Peru",
-                phone: "+51 987 654 321",
-                email: "contact@globalrelief.org",
-                representative: "María González",
-                repEmail: "mgonzalez@globalrelief.org",
-            },
-
-            activeProjects: [
-                {
-                    id: 1,
-                    name: "Clean Water Wells",
-                    budget: "$80,000",
-                    raised: "$65,000",
-                    status: "in progress",
-                    progress: 82,
-                },
-                {
-                    id: 2,
-                    name: "Child Nutrition Program",
-                    budget: "$120,000",
-                    raised: "$120,000",
-                    status: "completed",
-                    progress: 100,
-                },
-                {
-                    id: 3,
-                    name: "Medical Supply Delivery",
-                    budget: "$45,000",
-                    raised: "$28,000",
-                    status: "planning",
-                    progress: 40,
-                },
-            ],
-        });
+        const fetchNGO = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const response = await axios.get('http://127.0.0.1:8000/api/representative/my-ngo/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const ngoData = response.data;
+                setNgo({
+                    name: ngoData.name,
+                    city: ngoData.city || 'N/A',
+                    country: ngoData.country,
+                    memberSince: '2020-01-01', // This would need to come from another query
+                    icon: <AccountBalanceIcon sx={{ fontSize: 60, color: "#FF3F01" }} />,
+                    overview: {
+                        totalProjects: 0, // Would need separate query
+                        active: 0,
+                        completed: 0,
+                        totalRaised: '$0',
+                        successRate: '0%',
+                    },
+                    contact: {
+                        address: ngoData.address || 'N/A',
+                        phone: ngoData.phone || 'N/A',
+                        email: ngoData.contact_email,
+                        representative: 'N/A', // Would need separate query
+                        repEmail: ngoData.contact_email,
+                    },
+                    activeProjects: [], // Would need separate query
+                });
+            } catch (error) {
+                console.error("Error fetching NGO:", error);
+            }
+        };
+        fetchNGO();
     }, []);
 
     const statusColors = {

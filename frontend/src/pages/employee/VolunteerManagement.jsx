@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
     Box,
     Typography,
@@ -32,31 +33,63 @@ export default function VolunteerManagement() {
     const [project, setProject] = useState("");
 
     useEffect(() => {
-        setVolunteers([
-            {
-                id: 1,
-                name: "Carlos Mendoza",
-                specialty: "Medicina",
-                project: "Health Aid Peru",
-                start: "2024-09-01",
-                end: "2024-12-15",
-            },
-            {
-                id: 2,
-                name: "Laura Torres",
-                specialty: "Logística",
-                project: "Food Distribution Chile",
-                start: "2025-01-10",
-                end: "—",
-            },
-        ]);
-    }, []);
+        const fetchVolunteers = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const specialtyId = specialty || null;
+                const url = specialtyId 
+                    ? `http://127.0.0.1:8000/api/employee/volunteers/assignment/?specialty_id=${specialtyId}`
+                    : 'http://127.0.0.1:8000/api/employee/volunteers/assignment/';
+                const response = await axios.get(url, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                // Transform data - this would need to join with project assignments
+                const transformed = response.data.map(v => ({
+                    id: v.volunteer_id,
+                    name: `${v.first_name} ${v.last_name}`,
+                    specialty: v.specialties || v.specialty_name || 'N/A',
+                    project: 'N/A', // Would need separate query
+                    start: 'N/A',
+                    end: '—',
+                }));
+                setVolunteers(transformed);
+            } catch (error) {
+                console.error("Error fetching volunteers:", error);
+            }
+        };
+        fetchVolunteers();
+    }, [specialty]);
+
+    const handleAssign = async () => {
+        const token = localStorage.getItem('token');
+        if (!token || !project || !specialty) {
+            alert("Please select both project and specialty");
+            return;
+        }
+        try {
+            // First get volunteer ID from specialty selection
+            // This is simplified - you'd need to select a specific volunteer
+            await axios.post('http://127.0.0.1:8000/api/employee/volunteers/assignment/', {
+                project_id: project,
+                volunteer_id: 1 // This should come from selection
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            alert("Volunteer assigned successfully");
+            setAssignOpen(false);
+            window.location.reload();
+        } catch (error) {
+            console.error("Error assigning volunteer:", error);
+            alert("Failed to assign volunteer. Check console for details.");
+        }
+    };
 
     const filtered = volunteers.filter((v) =>
         v.name.toLowerCase().includes(query.toLowerCase())
     );
 
-    // Estilo reutilizable para que los inputs se iluminen en naranja
+    // Reusable style to make inputs highlight in orange
     const inputStyle = {
         "& label.Mui-focused": { color: MAIN_ORANGE },
         "& .MuiOutlinedInput-root": {
@@ -118,12 +151,12 @@ export default function VolunteerManagement() {
                 <Table>
                     <TableHead>
                         <TableRow sx={{ backgroundColor: "#F4F7FB" }}>
-                            <TableCell><strong>Voluntario</strong></TableCell>
-                            <TableCell><strong>Proyecto</strong></TableCell>
-                            <TableCell><strong>Especialidad</strong></TableCell>
-                            <TableCell><strong>Fecha Inicio</strong></TableCell>
-                            <TableCell><strong>Fecha Fin</strong></TableCell>
-                            <TableCell align="right"><strong>Acciones</strong></TableCell>
+                            <TableCell><strong>Volunteer</strong></TableCell>
+                            <TableCell><strong>Project</strong></TableCell>
+                            <TableCell><strong>Specialty</strong></TableCell>
+                            <TableCell><strong>Start Date</strong></TableCell>
+                            <TableCell><strong>End Date</strong></TableCell>
+                            <TableCell align="right"><strong>Actions</strong></TableCell>
                         </TableRow>
                     </TableHead>
 
@@ -162,9 +195,9 @@ export default function VolunteerManagement() {
                             label="Specialty"
                             onChange={(e) => setSpecialty(e.target.value)}
                         >
-                            <MenuItem value="Medicina">Medicina</MenuItem>
-                            <MenuItem value="Logística">Logística</MenuItem>
-                            <MenuItem value="Psicología">Psicología</MenuItem>
+                            <MenuItem value="Medicine">Medicine</MenuItem>
+                            <MenuItem value="Logistics">Logistics</MenuItem>
+                            <MenuItem value="Psychology">Psychology</MenuItem>
                         </Select>
                     </FormControl>
 
@@ -186,6 +219,7 @@ export default function VolunteerManagement() {
                     <Button
                         variant="contained"
                         fullWidth
+                        onClick={handleAssign}
                         sx={{
                             mt: 2,
                             bgcolor: MAIN_ORANGE,

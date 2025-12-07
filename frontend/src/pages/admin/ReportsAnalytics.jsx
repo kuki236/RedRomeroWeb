@@ -154,7 +154,7 @@ export default function ReportsAnalytics() {
                         <Box display="flex" alignItems="center" gap={1} mb={3}>
                             <Assessment sx={{ color: primaryColor }} />
                             <Typography variant="h6" fontWeight={700} color="#1E293B">
-                                Top 10 Proyectos (Reportes)
+                                Top 10 Projects (Reports)
                             </Typography>
                         </Box>
                         <ResponsiveContainer width="100%" height={350}> {/* Aumenté un poco la altura */}
@@ -183,7 +183,7 @@ export default function ReportsAnalytics() {
                                     fill={primaryColor} 
                                     radius={[0, 4, 4, 0]} 
                                     barSize={20} 
-                                    name="Reportes" 
+                                    name="Reports" 
                                 />
                             </BarChart>
                         </ResponsiveContainer>

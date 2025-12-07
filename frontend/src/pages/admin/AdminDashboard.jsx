@@ -22,10 +22,10 @@ const pieColors = ['#10B981', '#FF3F01', '#F59E0B', '#3B82F6'];
 
 // --- INITIAL STATE ---
 const initialKpiData = [
-    { title: 'PROYECTOS ACTIVOS', value: '...', trend: '...', icon: <Folder sx={{ color: primaryColor }} />, trendColor: successColor },
-    { title: 'DONACIONES ESTE MES', value: '...', trend: '...', icon: <MonetizationOn sx={{ color: successColor }} />, trendColor: successColor },
-    { title: 'VOLUNTARIOS ACTIVOS', value: '...', trend: '...', icon: <PeopleAlt sx={{ color: successColor }} />, trendColor: successColor },
-    { title: 'ONGS REGISTRADAS', value: '...', trend: '...', icon: <Business sx={{ color: primaryColor }} />, trendColor: 'text.secondary' },
+    { title: 'ACTIVE PROJECTS', value: '...', trend: '...', icon: <Folder sx={{ color: primaryColor }} />, trendColor: successColor },
+    { title: 'DONATIONS THIS MONTH', value: '...', trend: '...', icon: <MonetizationOn sx={{ color: successColor }} />, trendColor: successColor },
+    { title: 'ACTIVE VOLUNTEERS', value: '...', trend: '...', icon: <PeopleAlt sx={{ color: successColor }} />, trendColor: successColor },
+    { title: 'REGISTERED NGOS', value: '...', trend: '...', icon: <Business sx={{ color: primaryColor }} />, trendColor: 'text.secondary' },
 ];
 
 export default function AdminDashboard() {
@@ -76,28 +76,28 @@ export default function AdminDashboard() {
             // Update KPIs
             setKpiData([
                 { 
-                    title: 'PROYECTOS ACTIVOS', 
+                    title: 'ACTIVE PROJECTS', 
                     value: data.active_projects.value, 
                     trend: data.active_projects.trend, 
                     icon: <Folder sx={{ color: primaryColor }} />, 
                     trendColor: data.active_projects.trend.startsWith('+') ? successColor : 'text.secondary' 
                 },
                 { 
-                    title: 'DONACIONES ESTE MES', 
+                    title: 'DONATIONS THIS MONTH', 
                     value: `$${data.monthly_donations.value}`, 
                     trend: data.monthly_donations.trend, 
                     icon: <MonetizationOn sx={{ color: successColor }} />, 
                     trendColor: data.monthly_donations.trend.startsWith('+') ? successColor : 'text.secondary' 
                 },
                 { 
-                    title: 'VOLUNTARIOS ACTIVOS', 
+                    title: 'ACTIVE VOLUNTEERS', 
                     value: data.active_volunteers.value, 
                     trend: data.active_volunteers.trend, 
                     icon: <PeopleAlt sx={{ color: successColor }} />, 
                     trendColor: data.active_volunteers.trend.startsWith('+') ? successColor : 'text.secondary' 
                 },
                 { 
-                    title: 'ONGS REGISTRADAS', 
+                    title: 'REGISTERED NGOS', 
                     value: data.registered_ngos.value, 
                     trend: data.registered_ngos.trend, 
                     icon: <Business sx={{ color: primaryColor }} />, 
@@ -230,10 +230,10 @@ export default function AdminDashboard() {
             {/* PROJECTS TABLE */}
             <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0' }}>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                    <Typography variant="h5" fontWeight={700} color="#1E293B">Proyectos Activos ({projectData.length})</Typography>
+                    <Typography variant="h5" fontWeight={700} color="#1E293B">Active Projects ({projectData.length})</Typography>
                     <Box display="flex" gap={1}>
-                        <Button variant="outlined" startIcon={<FileDownload />} sx={{ textTransform: 'none', color: primaryColor, borderColor: primaryColor }}>Exportar CSV</Button>
-                        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#D93602' }, textTransform: 'none' }}>Nuevo</Button>
+                        <Button variant="outlined" startIcon={<FileDownload />} sx={{ textTransform: 'none', color: primaryColor, borderColor: primaryColor }}>Export CSV</Button>
+                        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#D93602' }, textTransform: 'none' }}>New</Button>
                     </Box>
                 </Box>
 

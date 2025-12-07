@@ -74,6 +74,23 @@ export default function AuditLogs() {
         return { bg: neutralBg, color: neutralTxt };
     };
 
+    // Translate action text from Spanish to English
+    const translateAction = (action) => {
+        if (!action) return action;
+        const actionMap = {
+            'APROBADO': 'APPROVED',
+            'Aprobado': 'APPROVED',
+            'aprobado': 'APPROVED',
+            'RECHAZADO': 'REJECTED',
+            'Rechazado': 'REJECTED',
+            'rechazado': 'REJECTED',
+            'PENDIENTE': 'PENDING',
+            'Pendiente': 'PENDING',
+            'pendiente': 'PENDING',
+        };
+        return actionMap[action] || action;
+    };
+
     const getCurrentData = () => {
         return auditData.filter(item => {
             const matchesAction = actionFilter === 'All' || 
@@ -224,7 +241,7 @@ export default function AuditLogs() {
                                             </TableCell>
                                             <TableCell>
                                                 <Chip 
-                                                    label={row.action} 
+                                                    label={translateAction(row.action)} 
                                                     size="small" 
                                                     sx={{ 
                                                         bgcolor: style.bg, 
