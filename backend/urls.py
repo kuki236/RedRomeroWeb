@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from users.serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView as OriginalTokenObtainPairView
 # Import views (Ensure UserManagementView is imported)
-from users.views import AdminDashboardData, UserManagementView ,SystemConfigView,UserProfileView,AuditLogView,ReportsAnalyticsView
+from users.views import AdminDashboardData, UserManagementView ,SystemConfigView,UserProfileView,AuditLogView,ReportsAnalyticsView, ProjectManagementView, EmployeeManagementView
 
 # Custom Login View configuration
 class CustomLoginView(OriginalTokenObtainPairView):
@@ -25,8 +25,21 @@ urlpatterns = [
     path('api/admin/users/update/', UserManagementView.as_view(), name='admin_users_update'),
 
 
+    # --- Employee Management (ESTAS SON LAS QUE TE FALTAN) ---
+    path('api/admin/employees/', EmployeeManagementView.as_view(), name='admin_employees_list'),
+    path('api/admin/employees/update/', EmployeeManagementView.as_view(), name='admin_employees_update'),
+    path('api/admin/employees/<int:pk>/', EmployeeManagementView.as_view(), name='admin_employees_delete'),
+
     path('api/admin/config/', SystemConfigView.as_view(), name='admin_config'),
     path('api/profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/admin/audit/', AuditLogView.as_view(), name='audit-logs'),
     path('api/admin/reports/', ReportsAnalyticsView.as_view(), name='reports-analytics'),
+
+    # --- Project Management ---
+    path('api/admin/projects/', ProjectManagementView.as_view(), name='admin_projects_list'),
+    path('api/admin/projects/update/', ProjectManagementView.as_view(), name='admin_projects_update'),
+    path('api/admin/projects/<int:pk>/', ProjectManagementView.as_view(), name='admin_projects_delete'),
+
+    # --- FINANCE & WORKFLOW (ESTA LÍNEA ES LA QUE FALTA O FALLA) ---
+    path('', include('finance.urls')),
 ]

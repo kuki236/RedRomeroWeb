@@ -43,7 +43,7 @@ export default function Navbar({ userInitials, role }) {
             {/* Right Actions */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <IconButton><Notifications /></IconButton>
-                <IconButton><Settings /></IconButton>
+                <IconButton onClick={() => navigate('/admin/config')}><Settings /></IconButton>
                 
                 {/* Avatar with Dropdown */}
                 <IconButton onClick={handleClick} size="small" sx={{ ml: 2 }}>

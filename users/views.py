@@ -742,3 +742,104 @@ class ReportsAnalyticsView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class ProjectManagementView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Listar proyectos"""
+        try:
+            # Usamos una consulta que devuelva todos los campos necesarios para el Admin y Dropdowns
+            sql = """
+                SELECT p.project_id, p.name, p.description, 
+                       TO_CHAR(p.start_date, 'YYYY-MM-DD') as start_date, 
+                       TO_CHAR(p.end_date, 'YYYY-MM-DD') as end_date,
+                       p.project_status_id, ps.status_name as status,
+                       p.ong_id, n.name as ong_name,
+                       p.representative_id, r.first_name || ' ' || r.last_name as representative_name
+                FROM Project p
+                JOIN Project_Status ps ON p.project_status_id = ps.project_status_id
+                JOIN NGO n ON p.ong_id = n.ong_id
+                LEFT JOIN Representative r ON p.representative_id = r.representative_id
+                ORDER BY p.project_id DESC
+            """
+            projects = fetch_raw_query(sql)
+            return Response(projects, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching projects: {e}")
+            return Response({'error': str(e)}, status=500)
+
+    def post(self, request):
+        """Crear proyecto usando PKG_PROJECT_MGMT"""
+        try:
+            # create_project tiene un OUT param al final
+            params = [
+                request.data.get('name'),
+                request.data.get('description'),
+                datetime.strptime(request.data.get('start_date'), '%Y-%m-%d').date(),
+                datetime.strptime(request.data.get('end_date'), '%Y-%m-%d').date() if request.data.get('end_date') else None,
+                request.data.get('project_status_id'),
+                request.data.get('ong_id'),
+                request.data.get('representative_id')
+            ]
+            
+            with connection.cursor() as cursor:
+                out_id = cursor.var(oracledb.NUMBER)
+                cursor.callproc('PKG_PROJECT_MGMT.create_project', params + [out_id])
+                new_id = out_id.getvalue()
+
+            return Response({'message': 'Project created', 'project_id': new_id}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating project: {e}")
+            return Response({'error': str(e)}, status=500)
+
+    def put(self, request):
+        """Actualizar proyecto"""
+        try:
+            # update_project_details NO tiene parámetros de salida
+            params = [
+                request.data.get('project_id'),
+                request.data.get('name'),
+                request.data.get('description'),
+                datetime.strptime(request.data.get('start_date'), '%Y-%m-%d').date(),
+                datetime.strptime(request.data.get('end_date'), '%Y-%m-%d').date() if request.data.get('end_date') else None,
+                request.data.get('project_status_id'),
+                request.data.get('ong_id'),
+                request.data.get('representative_id')
+            ]
+            
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_PROJECT_MGMT.update_project_details', params)
+
+            return Response({'message': 'Project updated'}, status=200)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+    def delete(self, request, pk=None):
+        """Eliminar proyecto"""
+        try:
+            with connection.cursor() as cursor:
+                cursor.callproc('PKG_PROJECT_MGMT.delete_project', [pk])
+            return Response({'message': 'Project deleted'}, status=200)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        
+class EmployeeManagementView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Listar todos los empleados"""
+        try:
+            sql = """
+                SELECT employee_id, first_name, last_name, email, phone, 
+                       TO_CHAR(birth_date, 'YYYY-MM-DD') as birth_date, 
+                       address, 
+                       TO_CHAR(hire_date, 'YYYY-MM-DD') as hire_date
+                FROM Employee 
+                ORDER BY employee_id DESC
+            """
+            employees = fetch_raw_query(sql)
+            return Response(employees, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
