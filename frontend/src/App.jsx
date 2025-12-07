@@ -32,6 +32,7 @@ import VolunteerManagement from './pages/employee/VolunteerManagement';
 import VolunteerDashboard from './pages/volunteer/VolunteerDashboard';
 import VolunteerProjects from './pages/volunteer/VolunteerProjects';
 import MySpecialties from './pages/volunteer/MySpecialties';
+import ExploreProjects from './pages/volunteer/ExploreProjects';
 
 
 // --- Representative Pages ---
@@ -87,6 +88,7 @@ function App() {
             <Route path="/dashboard/volunteer" element={<VolunteerDashboard />} />
             <Route path="/volunteer/proyectos" element={<VolunteerProjects />} />
             <Route path="/volunteer/especialidades" element={<MySpecialties />} />
+            <Route path="/volunteer/explorar-proyectos" element={<ExploreProjects />} />
 
 
             {/* Representative routes */}

@@ -1,21 +1,25 @@
-import React from 'react';
-import { 
-    Box, Typography, Grid, Paper, Button, Chip, Divider
+import React, { useState } from 'react';
+import {
+    Box, Typography, Grid, Paper, Button, Chip
 } from '@mui/material';
-import { 
-    Folder, AccessTime, TaskAlt, Star, CheckCircle, 
+import {
+    Folder, AccessTime, TaskAlt, Star, CheckCircle,
     BookmarkBorder, Visibility, ArrowForward, LocalFireDepartment
 } from '@mui/icons-material';
-import { 
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+import {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import { useNavigate } from 'react-router-dom'; // IMPORTANTE: Para la navegación
 import { useRoleProtection } from '../../hooks/useRoleProtection';
 
-// --- MOCK DATA (Based on Image) ---
+// --- IMPORTAR EL MODAL ---
+import ProjectDetailsModal from "../ProjectDetailsModal";
+
+// --- MOCK DATA ---
 const kpiData = [
     { title: 'Active Projects', value: '2', icon: <Folder sx={{ color: '#F59E0B', fontSize: 30 }} />, bgColor: '#FFFBEB' },
     { title: 'Hours This Mth', value: '156', icon: <AccessTime sx={{ color: '#6B7280', fontSize: 30 }} />, bgColor: '#F3F4F6' },
-    { title: 'Projects Complete', value: '3', icon: <TaskAlt sx={{ color: '#EF4444', fontSize: 30 }} />, bgColor: '#FEF2F2' }, // Using TaskAlt as 'Target' replacement
+    { title: 'Projects Complete', value: '3', icon: <TaskAlt sx={{ color: '#EF4444', fontSize: 30 }} />, bgColor: '#FEF2F2' },
     { title: 'Rating Average', value: '4.8', icon: <Star sx={{ color: '#FCD34D', fontSize: 30 }} />, bgColor: '#FFFBEB' },
 ];
 
@@ -56,6 +60,35 @@ const opportunities = [
 export default function VolunteerDashboard() {
     // 1. Security Check
     useRoleProtection('VOLUNTEER');
+    const navigate = useNavigate();
+
+    // 2. States for Modal
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [selectedProject, setSelectedProject] = useState(null);
+
+    // 3. Handlers
+    const handleOpenDetails = (opp) => {
+        // Adaptamos los datos de "opportunity" al formato que espera el Modal genérico
+        // ya que el dashboard de voluntarios tiene campos ligeramente distintos (tags).
+        const formattedProject = {
+            ...opp,
+            name: opp.title, // El modal usa 'name', aquí tenemos 'title'
+            status: "Recruiting",
+            volunteers: opp.tags.team,
+            timeline: `${opp.tags.start} (${opp.tags.duration})`,
+            // Datos simulados de fondos para que el modal no se vea vacío
+            raised: "$15,000",
+            goal: "$20,000",
+            percent: 75
+        };
+        setSelectedProject(formattedProject);
+        setDetailsOpen(true);
+    };
+
+    const handleCloseDetails = () => {
+        setDetailsOpen(false);
+        setSelectedProject(null);
+    };
 
     return (
         <Box>
@@ -88,11 +121,11 @@ export default function VolunteerDashboard() {
                 <Grid item xs={12} md={4}>
                     <Paper elevation={0} sx={{ p: 4, borderRadius: 3, border: '1px solid #E2E8F0', height: '100%' }}>
                         <Typography variant="h6" fontWeight={700} color="#1E293B" mb={3}>My Specialties</Typography>
-                        
+
                         <Box display="flex" flexDirection="column" gap={3}>
                             {specialties.map((spec, idx) => (
                                 <Box key={idx} display="flex" gap={2}>
-                                    <CheckCircle sx={{ color: '#65A30D', fontSize: 28 }} /> {/* Green Check */}
+                                    <CheckCircle sx={{ color: '#65A30D', fontSize: 28 }} />
                                     <Box>
                                         <Typography variant="subtitle2" fontWeight={700} color="#1E293B">{spec.name}</Typography>
                                         <Typography variant="caption" color="text.secondary">{spec.desc}</Typography>
@@ -107,7 +140,7 @@ export default function VolunteerDashboard() {
                 <Grid item xs={12} md={8}>
                     <Paper elevation={0} sx={{ p: 4, borderRadius: 3, border: '1px solid #E2E8F0', height: '100%' }}>
                         <Typography variant="h6" fontWeight={700} color="#1E293B" mb={1}>Contribution This Year</Typography>
-                        
+
                         <Box sx={{ height: 250, width: '100%' }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={contributionData}>
@@ -115,13 +148,13 @@ export default function VolunteerDashboard() {
                                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} dy={10} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
                                     <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="hours" 
-                                        stroke="#FF3F01" 
-                                        strokeWidth={3} 
-                                        dot={{ r: 5, fill: '#FFFFFF', stroke: '#FF3F01', strokeWidth: 3 }} 
-                                        activeDot={{ r: 7 }} 
+                                    <Line
+                                        type="monotone"
+                                        dataKey="hours"
+                                        stroke="#FF3F01"
+                                        strokeWidth={3}
+                                        dot={{ r: 5, fill: '#FFFFFF', stroke: '#FF3F01', strokeWidth: 3 }}
+                                        activeDot={{ r: 7 }}
                                     />
                                 </LineChart>
                             </ResponsiveContainer>
@@ -134,7 +167,15 @@ export default function VolunteerDashboard() {
             <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                     <Typography variant="h6" fontWeight={700} color="#1E293B">Available Opportunities</Typography>
-                    <Button endIcon={<ArrowForward />} sx={{ textTransform: 'none', color: '#FF3F01', fontWeight: 600 }}>Browse All</Button>
+
+                    {/* --- BOTÓN BROWSE ALL CONECTADO --- */}
+                    <Button
+                        endIcon={<ArrowForward />}
+                        sx={{ textTransform: 'none', color: '#FF3F01', fontWeight: 600 }}
+                        onClick={() => navigate('/volunteer/explorar-proyectos')}
+                    >
+                        Browse All
+                    </Button>
                 </Box>
 
                 <Box display="flex" flexDirection="column" gap={3}>
@@ -181,15 +222,30 @@ export default function VolunteerDashboard() {
 
                             <Box display="flex" gap={2}>
                                 <Button variant="contained" sx={{ bgcolor: '#FF3F01', fontWeight: 700, textTransform: 'none', '&:hover': { bgcolor: '#D93602' } }}>
-                                    ✅ Apply Now
+                                    Apply Now
                                 </Button>
                                 <Button startIcon={<BookmarkBorder />} sx={{ color: '#64748B', textTransform: 'none', fontWeight: 600 }}>Save for Later</Button>
-                                <Button startIcon={<Visibility />} sx={{ color: '#64748B', textTransform: 'none', fontWeight: 600 }}>View Details</Button>
+
+                                {/* --- BOTÓN VIEW DETAILS CONECTADO AL MODAL --- */}
+                                <Button
+                                    startIcon={<Visibility />}
+                                    sx={{ color: '#64748B', textTransform: 'none', fontWeight: 600 }}
+                                    onClick={() => handleOpenDetails(opp)}
+                                >
+                                    View Details
+                                </Button>
                             </Box>
                         </Paper>
                     ))}
                 </Box>
             </Box>
+
+            {/* --- MODAL AL FINAL --- */}
+            <ProjectDetailsModal
+                open={detailsOpen}
+                onClose={handleCloseDetails}
+                project={selectedProject}
+            />
         </Box>
     );
 }

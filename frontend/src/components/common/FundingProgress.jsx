@@ -10,7 +10,7 @@ export default function FundingProgress({ value, total, goal }) {
                 <CircularProgress
                     variant="determinate"
                     value={100}
-                    size={120}
+                    size={200}
                     thickness={4}
                     sx={{ color: '#F3F4F6' }} 
                 />
@@ -18,7 +18,7 @@ export default function FundingProgress({ value, total, goal }) {
                 <CircularProgress
                     variant="determinate"
                     value={value}
-                    size={120}
+                    size={200}
                     thickness={4}
                     sx={{ 
                         color: '#FF3F01',
