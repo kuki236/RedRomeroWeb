@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from 'axios';
 import {
     Box, Typography, Paper, TextField, Button, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Chip, MenuItem, Select, InputLabel,
     FormControl, Drawer, Divider, Dialog, DialogTitle, DialogContent, IconButton, Grid,
-    CircularProgress
+    CircularProgress, Alert
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -21,6 +21,7 @@ export default function ProjectReports() {
     const [reports, setReports] = useState([]);
     const [projectsList, setProjectsList] = useState([]); // Para el dropdown de crear
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     
     // Filters
     const [query, setQuery] = useState("");
@@ -40,13 +41,9 @@ export default function ProjectReports() {
     const [selectedReport, setSelectedReport] = useState(null);
 
     // --- FETCH DATA ---
-    useEffect(() => {
-        fetchReports();
-        fetchProjects();
-    }, []);
-
-    const fetchReports = async () => {
+    const fetchReports = useCallback(async () => {
         const token = localStorage.getItem('token');
+        setError(null);
         try {
             setLoading(true);
             const response = await axios.get('http://127.0.0.1:8000/api/workflow/reports/', {
@@ -55,14 +52,16 @@ export default function ProjectReports() {
             setReports(response.data);
         } catch (error) {
             console.error("Error loading reports:", error);
+            setError("Error loading reports. Please try again.");
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const fetchProjects = async () => {
+    const fetchProjects = useCallback(async () => {
         const token = localStorage.getItem('token');
         try {
+            // Asegúrate de que este endpoint exista en tu backend o ajusta a la ruta correcta de proyectos
             const response = await axios.get('http://127.0.0.1:8000/api/admin/projects/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -70,7 +69,12 @@ export default function ProjectReports() {
         } catch (error) {
             console.error("Error loading projects list:", error);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchReports();
+        fetchProjects();
+    }, [fetchReports, fetchProjects]);
 
     // --- HANDLERS ---
     const handleCreateSubmit = async () => {
@@ -118,6 +122,7 @@ export default function ProjectReports() {
         Approved: "success",
         Pending: "warning",
         Rejected: "error",
+        Enviado: "info"
     };
 
     const inputStyle = {
@@ -130,15 +135,24 @@ export default function ProjectReports() {
             {/* TITLE + BUTTON */}
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
                 <Typography variant="h4" fontWeight={800}>Project Reports</Typography>
-                <Button variant="contained" onClick={() => setDrawerOpen(true)} sx={{ bgcolor: MAIN_ORANGE, fontWeight: 600, "&:hover": { bgcolor: DARK_ORANGE } }}>
+                <Button 
+                    variant="contained" 
+                    onClick={() => setDrawerOpen(true)} 
+                    sx={{ bgcolor: MAIN_ORANGE, fontWeight: 600, "&:hover": { bgcolor: DARK_ORANGE } }}
+                >
                     Create New Report
                 </Button>
             </Box>
 
+            {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
             {/* FILTER BAR */}
             <Paper sx={{ p: 2, display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
                 <TextField
-                    size="small" placeholder="Search by title..." value={query} onChange={(e) => setQuery(e.target.value)}
+                    size="small" 
+                    placeholder="Search by title..." 
+                    value={query} 
+                    onChange={(e) => setQuery(e.target.value)}
                     sx={{ flexGrow: 1, ...inputStyle }}
                     InputProps={{ startAdornment: (<SearchIcon fontSize="small" sx={{ mr: 1, opacity: 0.6 }} />) }}
                 />
@@ -147,7 +161,7 @@ export default function ProjectReports() {
                     <Select value={projectFilter} label="Project" onChange={(e) => setProjectFilter(e.target.value)}>
                         <MenuItem value="">All Projects</MenuItem>
                         {projectsList.map(p => (
-                            <MenuItem key={p.project_id} value={p.name}>{p.name}</MenuItem>
+                            <MenuItem key={p.id || p.project_id} value={p.name || p.project}>{p.name || p.project}</MenuItem>
                         ))}
                     </Select>
                 </FormControl>
@@ -176,7 +190,13 @@ export default function ProjectReports() {
                                     <TableCell>{row.title}</TableCell>
                                     <TableCell>{row.project}</TableCell>
                                     <TableCell>{row.date}</TableCell>
-                                    <TableCell><Chip label={row.status} color={statusColors[row.status]} size="small"/></TableCell>
+                                    <TableCell>
+                                        <Chip 
+                                            label={row.status} 
+                                            color={statusColors[row.status] || "default"} 
+                                            size="small"
+                                        />
+                                    </TableCell>
                                     <TableCell>
                                         <Button size="small" sx={{ color: MAIN_ORANGE }} onClick={() => handleOpenView(row)}>View</Button>
                                     </TableCell>
@@ -207,7 +227,7 @@ export default function ProjectReports() {
                                 </Grid>
                                 <Grid item xs={6} sm={3}>
                                     <Typography variant="caption" color="text.secondary" display="block">Status</Typography>
-                                    <Chip label={selectedReport.status} color={statusColors[selectedReport.status]} size="small" sx={{ fontWeight: 700 }} />
+                                    <Chip label={selectedReport.status} color={statusColors[selectedReport.status] || "default"} size="small" sx={{ fontWeight: 700 }} />
                                 </Grid>
                             </Grid>
                             <Divider />
@@ -215,6 +235,7 @@ export default function ProjectReports() {
                                 <Typography variant="subtitle2" fontWeight={700} mb={1}>Description</Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>{selectedReport.description || "No description."}</Typography>
                             </Box>
+                            {/* Attachments Section (Visual Only unless backend supports files) */}
                             <Box>
                                 <Typography variant="subtitle2" fontWeight={700} mb={1.5}>Attached Documents</Typography>
                                 <Paper variant="outlined" sx={{ p: 2, display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: "#F8FAFC", borderColor: "#E2E8F0" }}>
@@ -240,20 +261,44 @@ export default function ProjectReports() {
                 </Box>
                 <Divider sx={{ mb: 3 }} />
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <TextField label="Report Title" fullWidth placeholder="Enter title" sx={inputStyle} value={newReport.title} onChange={(e) => setNewReport({...newReport, title: e.target.value})} />
+                    <TextField 
+                        label="Report Title" 
+                        fullWidth 
+                        placeholder="Enter title" 
+                        sx={inputStyle} 
+                        value={newReport.title} 
+                        onChange={(e) => setNewReport({...newReport, title: e.target.value})} 
+                    />
                     
                     <FormControl fullWidth sx={inputStyle}>
                         <InputLabel>Project</InputLabel>
-                        <Select label="Project" value={newReport.project_id} onChange={(e) => setNewReport({...newReport, project_id: e.target.value})}>
+                        <Select 
+                            label="Project" 
+                            value={newReport.project_id} 
+                            onChange={(e) => setNewReport({...newReport, project_id: e.target.value})}
+                        >
                             {projectsList.map(p => (
-                                <MenuItem key={p.project_id} value={p.project_id}>{p.name}</MenuItem>
+                                <MenuItem key={p.id || p.project_id} value={p.id || p.project_id}>{p.name || p.project}</MenuItem>
                             ))}
                         </Select>
                     </FormControl>
 
-                    <TextField label="Description" multiline rows={4} fullWidth placeholder="Enter report summary..." sx={inputStyle} value={newReport.description} onChange={(e) => setNewReport({...newReport, description: e.target.value})} />
+                    <TextField 
+                        label="Description" 
+                        multiline 
+                        rows={4} 
+                        fullWidth 
+                        placeholder="Enter report summary..." 
+                        sx={inputStyle} 
+                        value={newReport.description} 
+                        onChange={(e) => setNewReport({...newReport, description: e.target.value})} 
+                    />
                     
-                    <Button variant="contained" sx={{ bgcolor: MAIN_ORANGE, fontWeight: 700, mt: 2, "&:hover": { bgcolor: DARK_ORANGE } }} onClick={handleCreateSubmit}>
+                    <Button 
+                        variant="contained" 
+                        sx={{ bgcolor: MAIN_ORANGE, fontWeight: 700, mt: 2, "&:hover": { bgcolor: DARK_ORANGE } }} 
+                        onClick={handleCreateSubmit}
+                    >
                         Save Report
                     </Button>
                 </Box>

@@ -301,6 +301,44 @@ class ProjectReportsView(APIView):
             return Response({'report_id': new_id}, status=201)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
+    
+    def get(self, request):
+        """Listar reportes de proyectos con JOIN a la tabla de proyectos."""
+        try:
+            # Usamos alias (AS) para evitar confusiones con los nombres de columnas
+            # TO_CHAR convierte la fecha de Oracle a string directo para el JSON
+            query = """
+                SELECT 
+                    r.report_id, 
+                    r.title,
+                    r.description, 
+                    p.name as project_name, 
+                    TO_CHAR(r.report_date, 'YYYY-MM-DD') as date_str
+                FROM Report r
+                JOIN Project p ON r.project_id = p.project_id
+                ORDER BY r.report_date DESC
+            """
+            
+            # Ejecutamos la consulta cruda
+            # fetch_raw_query devuelve una lista de diccionarios con claves en minúsculas
+            raw_data = fetch_raw_query(query)
+            
+            # Formateamos la respuesta para que coincida EXACTAMENTE con lo que espera React
+            response_data = []
+            for row in raw_data:
+                response_data.append({
+                    "id": row.get('report_id'),      # Coincide con r.report_id
+                    "title": row.get('title'),       # Coincide con r.title
+                    "project": row.get('project_name'), # Coincide con p.name as project_name
+                    "description": row.get('description'),
+                    "date": row.get('date_str'),     # Coincide con as date_str
+                    "status": "Approved"             # Valor quemado (hardcoded) ya que la tabla no tiene status
+                })
+
+            return Response(response_data, status=200)
+        except Exception as e:
+            logger.error(f"Error fetching reports: {e}")
+            return Response({'error': str(e)}, status=500)
 
 # ==============================================================================
 #  MÓDULO 3: AUDITORÍA Y KPIS
@@ -577,33 +615,6 @@ class RepresentativeNGOView(APIView):
             logger.error(f"Error fetching My NGO data: {e}")
             return Response({'error': str(e)}, status=500)
         
-class ProjectReportsView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    # --- MÉTODO GET NUEVO (Listar Reportes) ---
-    def get(self, request):
-        try:
-            # Consulta para obtener reportes con nombres de proyecto
-            sql = """
-                SELECT r.report_id as id, 
-                       r.title, 
-                       p.name as project, 
-                       TO_CHAR(r.report_date, 'YYYY-MM-DD') as date, 
-                       r.description,
-                       -- Simulación de estado (ya que Report no tiene status en tu SQL original)
-                       -- Podrías agregar esta columna a la tabla Report si la necesitas real.
-                       CASE WHEN r.report_date > SYSDATE - 7 THEN 'Pending' ELSE 'Approved' END as status
-                FROM Report r
-                JOIN Project p ON r.project_id = p.project_id
-                ORDER BY r.report_date DESC
-            """
-            reports = fetch_raw_query(sql)
-            
-            # Ajustar claves para que coincidan con el frontend si fetch_raw_query usa lower keys
-            # (fetch_raw_query devuelve diccionarios con claves en minúscula por defecto)
-            return Response(reports, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
 
     # --- MÉTODO POST EXISTENTE (Crear Reporte) ---
     def post(self, request):

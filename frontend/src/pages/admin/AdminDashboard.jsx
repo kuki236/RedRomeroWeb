@@ -159,7 +159,7 @@ export default function AdminDashboard() {
                     <Typography variant="h4" fontWeight={800} color="#1E293B">Dashboard Overview</Typography>
                     <Typography variant="body2" color="text.secondary">Welcome back, Admin</Typography>
                 </Box>
-                <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, borderRadius: 2, fontWeight: 700, px: 3, py: 1, '&:hover': { bgcolor: '#D93602' } }}>
+                <Button onClick={() => navigate('/admin/reportes')} variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, borderRadius: 2, fontWeight: 700, px: 3, py: 1, '&:hover': { bgcolor: '#D93602' } }}>
                     Create Report
                 </Button>
             </Box>
@@ -186,7 +186,7 @@ export default function AdminDashboard() {
                 {/* 1. Donation Trends */}
                 <Grid item xs={12} md={8}>
                     <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400, display: 'flex', flexDirection: 'column' }}>
-                        <Typography variant="h6" fontWeight={700} mb={2}>📈 Tendencia de Donaciones 2025</Typography>
+                        <Typography variant="h6" fontWeight={700} mb={2}>📈 Donation Trends 2025</Typography>
                         <Box sx={{ flexGrow: 1, width: '100%', minHeight: 0 }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData.trends}>
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
                 {/* 2. Projects by Status (LIMPIO - SIN CIRCULO) */}
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0', height: 400, display: 'flex', flexDirection: 'column' }}>
-                        <Typography variant="h6" fontWeight={700} mb={2}>Estado de Proyectos</Typography>
+                        <Typography variant="h6" fontWeight={700} mb={2}>Project Status</Typography>
                         
                         {/* Contenido Central: Total */}
                         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
@@ -252,7 +252,7 @@ export default function AdminDashboard() {
                     <Typography variant="h5" fontWeight={700} color="#1E293B">Proyectos Activos ({projectData.length})</Typography>
                     <Box display="flex" gap={1}>
                         <Button variant="outlined" startIcon={<FileDownload />} sx={{ textTransform: 'none', color: primaryColor, borderColor: primaryColor }}>Exportar CSV</Button>
-                        <Button variant="contained" startIcon={<Add />} sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#D93602' }, textTransform: 'none' }}>Nuevo</Button>
+                        <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/projects')} sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#D93602' }, textTransform: 'none' }}>Nuevo</Button>
                     </Box>
                 </Box>
 
