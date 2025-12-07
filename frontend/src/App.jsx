@@ -43,7 +43,9 @@ import RequestsManagement from './pages/representative/RequestsManagement';
 import DonationsReceived from './pages/representative/DonationsReceived';
 import ViewReports from './pages/representative/ViewReports';
 import MyNGO from './pages/representative/MyNGO';
-import Profile from './pages/common/Profile';  
+import Profile from './pages/common/Profile';
+
+
 
 // Wrapper for layout with Sidebar / Navbar
 const DashboardWrapper = () => (
@@ -79,6 +81,7 @@ function App() {
             <Route path="/admin/reportes" element={<ReportsAnalytics />} />
 
             <Route path="/admin/config" element={<ConfigurationSettings />} />
+
 
             {/* Employee routes */}
             <Route path="/dashboard/employee" element={<EmployeeDashboard />} />
