@@ -18,6 +18,7 @@ import ManageVolunteer from './pages/admin/ManageVolunteer';
 import ManageRepresentative from './pages/admin/ManageRepresentative';
 import ManageDonor from './pages/admin/ManageDonor';
 import AuditLogs from './pages/admin/AuditLogs';
+import ReportsAnalytics from './pages/admin/ReportsAnalytics';
 
 // --- Employee Pages ---
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
@@ -27,7 +28,7 @@ import ReportManagement from './pages/employee/ReportManagement';
 import DonationsManagement from './pages/employee/DonationsManagement';
 import ProjectManagement from './pages/employee/ProjectManagement';
 import VolunteerManagement from './pages/employee/VolunteerManagement';
-
+import ConfigurationSettings from './pages/admin/ConfigurationSettings';  
 // --- Volunteer Pages ---
 import VolunteerDashboard from './pages/volunteer/VolunteerDashboard';
 import VolunteerProjects from './pages/volunteer/VolunteerProjects';
@@ -42,6 +43,7 @@ import RequestsManagement from './pages/representative/RequestsManagement';
 import DonationsReceived from './pages/representative/DonationsReceived';
 import ViewReports from './pages/representative/ViewReports';
 import MyNGO from './pages/representative/MyNGO';
+import Profile from './pages/common/Profile';  
 
 // Wrapper for layout with Sidebar / Navbar
 const DashboardWrapper = () => (
@@ -74,6 +76,9 @@ function App() {
             <Route path="/admin/volunteer" element={<ManageVolunteer />} />
             <Route path="/admin/representative" element={<ManageRepresentative />} />
             <Route path="/admin/donors" element={<ManageDonor />} />
+            <Route path="/admin/reportes" element={<ReportsAnalytics />} />
+
+            <Route path="/admin/config" element={<ConfigurationSettings />} />
 
             {/* Employee routes */}
             <Route path="/dashboard/employee" element={<EmployeeDashboard />} />
@@ -100,9 +105,14 @@ function App() {
             <Route path="/representative/mi-ong" element={<MyNGO />} />
 
         </Route>
-
+        <Route path="/admin/perfil" element={<Profile />} />  
+        <Route path="/employee/perfil" element={<Profile />} />  
+        <Route path="/volunteer/perfil" element={<Profile />} />  
+        <Route path="/representative/perfil" element={<Profile />} />
         {/* Fallback redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
+
+
 
       </Routes>
     </BrowserRouter>

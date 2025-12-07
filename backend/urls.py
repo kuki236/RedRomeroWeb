@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from users.serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView as OriginalTokenObtainPairView
 # Import views (Ensure UserManagementView is imported)
-from users.views import AdminDashboardData, UserManagementView 
+from users.views import AdminDashboardData, UserManagementView ,SystemConfigView,UserProfileView,AuditLogView,ReportsAnalyticsView
 
 # Custom Login View configuration
 class CustomLoginView(OriginalTokenObtainPairView):
@@ -23,4 +23,10 @@ urlpatterns = [
     # --- User Management Endpoints (Listing, Create, Update) ---
     path('api/admin/users/', UserManagementView.as_view(), name='admin_users_list'),
     path('api/admin/users/update/', UserManagementView.as_view(), name='admin_users_update'),
+
+
+    path('api/admin/config/', SystemConfigView.as_view(), name='admin_config'),
+    path('api/profile/', UserProfileView.as_view(), name='user-profile'),
+    path('api/admin/audit/', AuditLogView.as_view(), name='audit-logs'),
+    path('api/admin/reports/', ReportsAnalyticsView.as_view(), name='reports-analytics'),
 ]

@@ -1,494 +1,273 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-    Box, Typography, IconButton, Paper, Table, TableBody, TableCell, TableContainer, 
-    TableHead, TableRow, TextField, MenuItem, Switch, Button, Chip, 
-    Drawer, CircularProgress, Grid, InputBase
+    Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
+    TableHead, TableRow, TextField, MenuItem, Button, Chip, 
+    Tabs, Tab, Pagination, InputAdornment, Grid, CircularProgress
 } from '@mui/material';
 import { 
-    Search, Add, Edit, Close
+    Search, FileDownload, CalendarToday, FilterList 
 } from '@mui/icons-material';
 
 const primaryColor = '#FF3F01';
-const actionTypes = ['CREATE', 'UPDATE', 'DELETE', 'ADJUST'];
+const successBg = '#ECFDF5';
+const successTxt = '#10B981';
+const errorBg = '#FEF2F2';
+const errorTxt = '#EF4444';
+const neutralBg = '#F3F4F6';
+const neutralTxt = '#6B7280';
 
-export default function BudgetHistoryManagement() {
+export default function AuditLogs() {
+    const [activeTab, setActiveTab] = useState(0);
+    const [auditData, setAuditData] = useState([]);
+    const [loading, setLoading] = useState(false);
     
-    // --- STATE ---
-    const [budgetHistory, setBudgetHistory] = useState([]); 
-    const [budgets, setBudgets] = useState([]);
-    const [employees, setEmployees] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    
-    // Drawer & Form State
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    const [formData, setFormData] = useState({
-        history_id: null,
-        budget_id: '',
-        employee_id: '',
-        old_amount: '',
-        new_amount: '',
-        reason: '',
-        change_date: '',
-        action_type: 'UPDATE',
-        status: 'Active'
-    });
+    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [actionFilter, setActionFilter] = useState('All');
 
-    // --- API CALLS ---
+    useEffect(() => {
+        fetchAuditLogs();
+    }, [activeTab, dateRange.start, dateRange.end]);
 
-    const fetchBudgetHistory = async () => {
+    const fetchAuditLogs = async () => {
+        setLoading(true);
         const token = localStorage.getItem('token');
-        if (!token) return;
+        
         try {
-            setLoading(true);
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/budget-history/', {
+            let url = `http://127.0.0.1:8000/api/admin/audit/?type=${activeTab}`;
+            if (dateRange.start) url += `&start_date=${dateRange.start}`;
+            if (dateRange.end) url += `&end_date=${dateRange.end}`;
+            
+            const response = await axios.get(url, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setBudgetHistory(response.data); 
+            
+            setAuditData(response.data);
         } catch (error) {
-            console.error("Error fetching budget history:", error);
+            console.error("Error fetching audit logs:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    const fetchBudgets = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        try {
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/budgets/', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setBudgets(response.data);
-        } catch (error) {
-            console.error("Error fetching budgets:", error);
-        }
+    const handleTabChange = (event, newValue) => {
+        setActiveTab(newValue);
+        setSearchTerm('');
+        setActionFilter('All');
     };
 
-    const fetchEmployees = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        try {
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/employees/', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setEmployees(response.data);
-        } catch (error) {
-            console.error("Error fetching employees:", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchBudgetHistory();
-        fetchBudgets();
-        fetchEmployees();
-    }, []);
-
-    const handleSaveBudgetHistory = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        try {
-            if (formData.history_id) {
-                // UPDATE
-                await axios.put('http://127.0.0.1:8000/api/admin/budget-history/update/', {
-                    history_id: formData.history_id,
-                    budget_id: formData.budget_id,
-                    employee_id: formData.employee_id,
-                    old_amount: formData.old_amount || null,
-                    new_amount: formData.new_amount,
-                    reason: formData.reason,
-                    change_date: formData.change_date,
-                    action_type: formData.action_type,
-                    status: formData.status
-                }, {
-                   headers: { Authorization: `Bearer ${token}` } 
-                });
-            } else {
-                // CREATE
-                await axios.post('http://127.0.0.1:8000/api/admin/budget-history/', formData, {
-                   headers: { Authorization: `Bearer ${token}` } 
-                });
-            }
-            fetchBudgetHistory(); 
-            handleCloseDrawer();
-        } catch (error) {
-            console.error("Error saving budget history:", error);
-            alert("Failed to save budget history. Check console for details.");
-        }
-    };
-
-    const handleToggleStatus = async (id, currentStatus) => {
-        const token = localStorage.getItem('token');
-        const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
-        const historyToUpdate = budgetHistory.find(h => h.history_id === id);
+    const getActionStyle = (action) => {
+        if (!action) return { bg: neutralBg, color: neutralTxt };
+        const lowerAction = action.toLowerCase();
         
-        if (!historyToUpdate) return;
-
-        try {
-             await axios.put('http://127.0.0.1:8000/api/admin/budget-history/update/', { 
-                 ...historyToUpdate, 
-                 status: newStatus 
-             }, {
-                headers: { Authorization: `Bearer ${token}` } 
-             });
-             fetchBudgetHistory(); 
-        } catch (error) {
-            console.error("Error updating status:", error);
-        }
+        if (lowerAction.includes('approv') || lowerAction.includes('receiv') || 
+            lowerAction.includes('active') || lowerAction.includes('assign') || 
+            lowerAction.includes('create')) 
+            return { bg: successBg, color: successTxt };
+        
+        if (lowerAction.includes('reject') || lowerAction.includes('refund') || 
+            lowerAction.includes('remov') || lowerAction.includes('delet') || 
+            lowerAction.includes('cancel')) 
+            return { bg: errorBg, color: errorTxt };
+            
+        return { bg: neutralBg, color: neutralTxt };
     };
 
-    // --- HANDLERS ---
+    const getCurrentData = () => {
+        return auditData.filter(item => {
+            const matchesAction = actionFilter === 'All' || 
+                                  (item.action && item.action.toLowerCase().includes(actionFilter.toLowerCase()));
+            
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = searchTerm === '' || 
+                                  (item.details && item.details.toLowerCase().includes(searchLower)) ||
+                                  (item.user && item.user.toLowerCase().includes(searchLower)) ||
+                                  (item.project && item.project.toLowerCase().includes(searchLower));
 
-    const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
-    
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    const handleOpenDrawer = (history = null) => {
-        if (history) {
-            // Edit Mode
-            setFormData({
-                history_id: history.history_id,
-                budget_id: history.budget_id,
-                employee_id: history.employee_id,
-                old_amount: history.old_amount || '',
-                new_amount: history.new_amount,
-                reason: history.reason || '',
-                change_date: history.change_date,
-                action_type: history.action_type,
-                status: history.status
-            });
-        } else {
-            // New Budget History Mode
-            setFormData({
-                history_id: null,
-                budget_id: '',
-                employee_id: '',
-                old_amount: '',
-                new_amount: '',
-                reason: '',
-                change_date: new Date().toISOString().slice(0, 16),
-                action_type: 'UPDATE',
-                status: 'Active'
-            });
-        }
-        setIsDrawerOpen(true);
-    };
-
-    const handleCloseDrawer = () => setIsDrawerOpen(false);
-
-    // --- FILTERING ---
-
-    const getFilteredBudgetHistory = () => {
-        let filtered = budgetHistory;
-        if (searchTerm) {
-            filtered = filtered.filter(h => 
-                (h.action_type && h.action_type.toLowerCase().includes(searchTerm)) || 
-                (h.reason && h.reason.toLowerCase().includes(searchTerm))
-            );
-        }
-        return filtered;
-    };
-
-    const getStatusChip = (status) => {
-        const isActive = status === 'Active';
-        return (
-            <Chip 
-                label={status} 
-                size="small" 
-                sx={{ 
-                    bgcolor: isActive ? '#E8F5E9' : '#FFEBEE', 
-                    color: isActive ? '#2E7D32' : '#C62828',
-                    fontWeight: 700,
-                    fontSize: '0.75rem'
-                }} 
-            />
-        );
-    };
-
-    const getActionChip = (actionType) => {
-        const colorMap = {
-            'CREATE': { bg: '#E3F2FD', color: '#1565C0' },
-            'UPDATE': { bg: '#FFF3E0', color: '#E65100' },
-            'DELETE': { bg: '#FFEBEE', color: '#C62828' },
-            'ADJUST': { bg: '#F3E5F5', color: '#6A1B9A' }
-        };
-        const colors = colorMap[actionType] || { bg: '#F5F5F5', color: '#616161' };
-        return (
-            <Chip 
-                label={actionType} 
-                size="small" 
-                sx={{ 
-                    bgcolor: colors.bg, 
-                    color: colors.color,
-                    fontWeight: 700,
-                    fontSize: '0.75rem'
-                }} 
-            />
-        );
-    };
-
-    // Helper functions to get names from IDs
-    const getBudgetName = (budgetId) => {
-        const budget = budgets.find(b => b.budget_id === budgetId);
-        return budget ? budget.name : budgetId;
-    };
-
-    const getEmployeeName = (employeeId) => {
-        const employee = employees.find(e => e.employee_id === employeeId);
-        return employee ? employee.name : employeeId;
-    };
-
-    const formatCurrency = (amount) => {
-        return amount ? `$${parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
-    };
-
-    const formatDateTime = (dateTime) => {
-        if (!dateTime) return '-';
-        const date = new Date(dateTime);
-        return date.toLocaleString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric', 
-            hour: '2-digit', 
-            minute: '2-digit' 
+            return matchesAction && matchesSearch;
         });
     };
 
     return (
-        <Box>
-            {/* PAGE HEADER */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                <Box>
-                    <Typography variant="h4" fontWeight={800} color="#1E293B">Budget History Management</Typography>
-                    <Typography variant="body2" color="text.secondary">Track budget changes, modifications, and audit trail.</Typography>
-                </Box>
-                <Button 
-                    variant="contained" 
-                    startIcon={<Add />} 
-                    onClick={() => handleOpenDrawer()}
-                    sx={{ bgcolor: primaryColor, borderRadius: 2, textTransform: 'none', fontWeight: 700, px: 3, '&:hover': { bgcolor: '#D93602' } }}
+        <Box sx={{ p: 0 }}> 
+            <Typography variant="h4" fontWeight={800} sx={{ mb: 3, color: '#1E293B' }}>
+                Reports & Audit Log
+            </Typography>
+
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+                <Tabs 
+                    value={activeTab} 
+                    onChange={handleTabChange} 
+                    aria-label="audit logs tabs"
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    TabIndicatorProps={{ style: { backgroundColor: primaryColor, height: 3 } }}
+                    sx={{ 
+                        '& .MuiTab-root': { 
+                            textTransform: 'none', 
+                            fontWeight: 600, 
+                            fontSize: '0.95rem',
+                            color: '#64748B',
+                            '&.Mui-selected': { color: primaryColor, fontWeight: 700 }
+                        }
+                    }}
                 >
-                    Create New Entry
-                </Button>
+                    <Tab label="Approval History" />
+                    <Tab label="Budget History" />
+                    <Tab label="Project Status History" />
+                    <Tab label="Donation Logs" />
+                    <Tab label="Assignment History" />
+                </Tabs>
             </Box>
 
-            {/* CONTENT CARD */}
-            <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid #E2E8F0' }}>
-                
-                {/* Search */}
-                <Box sx={{ mb: 3 }}>
-                    <InputBase 
-                        sx={{ p: '8px 12px', width: '100%', maxWidth: 400, border: '1px solid #E2E8F0', borderRadius: 2, mb: 3 }} 
-                        placeholder="Search by action type or reason..." 
-                        value={searchTerm}
-                        onChange={handleSearch}
-                        startAdornment={<Search sx={{ mr: 1, color: 'text.secondary' }} />} 
-                    />
-                </Box>
-                
-                {/* TABLE */}
-                <TableContainer>
-                    <Table sx={{ minWidth: 650 }}>
+            <Paper elevation={0} sx={{ p: 0, mb: 3, bgcolor: 'transparent' }}>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} md={3}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'white', p: '6px 12px', borderRadius: 2, border: '1px solid #E2E8F0', gap: 1 }}>
+                            <CalendarToday fontSize="small" sx={{ color: '#94A3B8' }} />
+                            <input 
+                                type="date"
+                                style={{ border: 'none', outline: 'none', color: '#64748B', fontFamily: 'inherit', width: '100%' }}
+                                onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                            />
+                            <Typography sx={{ color: '#94A3B8' }}>-</Typography>
+                            <input 
+                                type="date"
+                                style={{ border: 'none', outline: 'none', color: '#64748B', fontFamily: 'inherit', width: '100%' }}
+                                onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                            />
+                        </Box>
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                        <TextField
+                            placeholder="Search by user, project, details..."
+                            size="small"
+                            fullWidth
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                            InputProps={{
+                                startAdornment: <InputAdornment position="start"><Search sx={{ color: '#94A3B8' }} /></InputAdornment>,
+                            }}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={3}>
+                        <TextField
+                            select
+                            value={actionFilter}
+                            onChange={(e) => setActionFilter(e.target.value)}
+                            size="small"
+                            fullWidth
+                            sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                            InputProps={{
+                                startAdornment: <InputAdornment position="start"><FilterList sx={{ color: '#94A3B8' }} /></InputAdornment>,
+                            }}
+                        >
+                            <MenuItem value="All">All Actions</MenuItem>
+                            <MenuItem value="Approv">Approved</MenuItem>
+                            <MenuItem value="Reject">Rejected</MenuItem>
+                            <MenuItem value="Update">Updated</MenuItem>
+                            <MenuItem value="Create">Created</MenuItem>
+                        </TextField>
+                    </Grid>
+
+                    <Grid item xs={12} md={2} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button 
+                            variant="contained" 
+                            startIcon={<FileDownload />}
+                            sx={{ 
+                                bgcolor: primaryColor, 
+                                fontWeight: 700, 
+                                textTransform: 'none',
+                                borderRadius: 2,
+                                height: 40,
+                                boxShadow: 'none',
+                                whiteSpace: 'nowrap',
+                                '&:hover': { bgcolor: '#D93602', boxShadow: 'none' }
+                            }}
+                        >
+                            Export CSV
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Paper>
+
+            <Paper sx={{ width: '100%', overflow: 'hidden', borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none' }}>
+                <TableContainer sx={{ minHeight: 300 }}>
+                    <Table stickyHeader aria-label="audit table">
                         <TableHead>
                             <TableRow>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Budget</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Employee</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Old Amount</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>New Amount</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Reason</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Change Date</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Action Type</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }}>Status</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#64748B' }} align="right">Actions</TableCell>
+                                <TableCell sx={{ fontWeight: 800, color: '#94A3B8', fontSize: '0.75rem', letterSpacing: '0.05em', borderBottom: '1px solid #E2E8F0' }}>DATE</TableCell>
+                                <TableCell sx={{ fontWeight: 800, color: '#94A3B8', fontSize: '0.75rem', letterSpacing: '0.05em', borderBottom: '1px solid #E2E8F0' }}>ACTION</TableCell>
+                                <TableCell sx={{ fontWeight: 800, color: '#94A3B8', fontSize: '0.75rem', letterSpacing: '0.05em', borderBottom: '1px solid #E2E8F0' }}>USER</TableCell>
+                                <TableCell sx={{ fontWeight: 800, color: '#94A3B8', fontSize: '0.75rem', letterSpacing: '0.05em', borderBottom: '1px solid #E2E8F0' }}>DETAILS</TableCell>
+                                <TableCell sx={{ fontWeight: 800, color: '#94A3B8', fontSize: '0.75rem', letterSpacing: '0.05em', borderBottom: '1px solid #E2E8F0' }}>ASSOCIATED PROJECT</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                                    <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
                                         <CircularProgress sx={{ color: primaryColor }} />
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                getFilteredBudgetHistory().map((history) => (
-                                    <TableRow key={history.history_id} hover>
-                                        <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
-                                            {getBudgetName(history.budget_id)}
-                                        </TableCell>
-                                        <TableCell sx={{ color: '#64748B' }}>{getEmployeeName(history.employee_id)}</TableCell>
-                                        <TableCell sx={{ color: '#64748B' }}>{formatCurrency(history.old_amount)}</TableCell>
-                                        <TableCell sx={{ color: '#1E293B', fontWeight: 600 }}>{formatCurrency(history.new_amount)}</TableCell>
-                                        <TableCell sx={{ color: '#64748B', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {history.reason || '-'}
-                                        </TableCell>
-                                        <TableCell sx={{ color: '#64748B' }}>{formatDateTime(history.change_date)}</TableCell>
-                                        <TableCell>{getActionChip(history.action_type)}</TableCell>
-                                        <TableCell>{getStatusChip(history.status)}</TableCell>
-                                        <TableCell align="right">
-                                            <IconButton size="small" onClick={() => handleOpenDrawer(history)}>
-                                                <Edit fontSize="small" sx={{ color: '#64748B' }} />
-                                            </IconButton>
-                                            <Switch 
-                                                size="small" 
-                                                checked={history.status === 'Active'} 
-                                                onChange={() => handleToggleStatus(history.history_id, history.status)}
-                                                sx={{ 
-                                                    '& .MuiSwitch-switchBase.Mui-checked': { color: primaryColor },
-                                                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: primaryColor },
-                                                }}
-                                            />
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                getCurrentData().map((row) => {
+                                    const style = getActionStyle(row.action);
+                                    return (
+                                        <TableRow hover role="checkbox" tabIndex={-1} key={row.id}>
+                                            <TableCell sx={{ color: '#64748B', fontWeight: 500, fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                                                {row.date}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip 
+                                                    label={row.action} 
+                                                    size="small" 
+                                                    sx={{ 
+                                                        bgcolor: style.bg, 
+                                                        color: style.color, 
+                                                        fontWeight: 700,
+                                                        borderRadius: 1.5,
+                                                        height: 24,
+                                                        fontSize: '0.75rem'
+                                                    }} 
+                                                />
+                                            </TableCell>
+                                            <TableCell sx={{ fontWeight: 600, color: '#1E293B', fontSize: '0.9rem' }}>
+                                                {row.user}
+                                            </TableCell>
+                                            <TableCell sx={{ color: '#475569', fontSize: '0.9rem', maxWidth: 400 }}>
+                                                {row.details}
+                                            </TableCell>
+                                            <TableCell sx={{ color: '#64748B', fontSize: '0.9rem' }}>
+                                                {row.project}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            )}
+                            
+                            {!loading && getCurrentData().length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={5} align="center" sx={{ py: 6, color: '#94A3B8' }}>
+                                        <Typography>No records found matching your filters.</Typography>
+                                    </TableCell>
+                                </TableRow>
                             )}
                         </TableBody>
                     </Table>
                 </TableContainer>
-            </Paper>
-
-            {/* DYNAMIC DRAWER (FORM) */}
-            <Drawer anchor="right" open={isDrawerOpen} onClose={handleCloseDrawer} PaperProps={{ sx: { width: 450, p: 4 } }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-                    <Typography variant="h5" fontWeight={800} color="#1E293B">{formData.history_id ? 'Edit Budget History' : 'New Budget History'}</Typography>
-                    <IconButton onClick={handleCloseDrawer}><Close /></IconButton>
-                </Box>
                 
-                <Box component="form" display="flex" flexDirection="column" gap={2.5}>
-                    
-                    {/* SECTION 1: REFERENCES */}
-                    <Typography variant="subtitle2" color="primary" fontWeight={700}>References</Typography>
-                    
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary">Budget</Typography>
-                            <TextField 
-                                select 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                name="budget_id" 
-                                value={formData.budget_id} 
-                                onChange={handleChange}
-                            >
-                                {budgets.map((budget) => (
-                                    <MenuItem key={budget.budget_id} value={budget.budget_id}>
-                                        {budget.name}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary">Employee</Typography>
-                            <TextField 
-                                select 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                name="employee_id" 
-                                value={formData.employee_id} 
-                                onChange={handleChange}
-                            >
-                                {employees.map((employee) => (
-                                    <MenuItem key={employee.employee_id} value={employee.employee_id}>
-                                        {employee.name}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                        </Grid>
-                    </Grid>
-
-                    {/* SECTION 2: AMOUNTS */}
-                    <Typography variant="subtitle2" color="primary" fontWeight={700} sx={{ mt: 1 }}>Amounts</Typography>
-                    
-                    <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary">Old Amount (Optional)</Typography>
-                            <TextField 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                type="number" 
-                                name="old_amount" 
-                                value={formData.old_amount} 
-                                onChange={handleChange}
-                                inputProps={{ min: 0, step: 0.01 }}
-                            />
-                        </Grid>
-                        <Grid item xs={6}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary">New Amount</Typography>
-                            <TextField 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                type="number" 
-                                name="new_amount" 
-                                value={formData.new_amount} 
-                                onChange={handleChange}
-                                inputProps={{ min: 0, step: 0.01 }}
-                            />
-                        </Grid>
-                    </Grid>
-
-                    {/* SECTION 3: CHANGE DETAILS */}
-                    <Typography variant="subtitle2" color="primary" fontWeight={700} sx={{ mt: 1 }}>Change Details</Typography>
-                    
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary">Action Type</Typography>
-                            <TextField 
-                                select 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                name="action_type" 
-                                value={formData.action_type} 
-                                onChange={handleChange}
-                            >
-                                {actionTypes.map((action) => (
-                                    <MenuItem key={action} value={action}>
-                                        {action}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary">Change Date & Time</Typography>
-                            <TextField 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                type="datetime-local" 
-                                name="change_date" 
-                                value={formData.change_date} 
-                                onChange={handleChange}
-                                InputLabelProps={{ shrink: true }}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Typography variant="caption" fontWeight={700} color="text.secondary">Reason (Optional)</Typography>
-                            <TextField 
-                                fullWidth 
-                                variant="outlined" 
-                                size="small" 
-                                name="reason" 
-                                value={formData.reason} 
-                                onChange={handleChange}
-                                multiline
-                                rows={4}
-                            />
-                        </Grid>
-                    </Grid>
-
-                    <Box display="flex" flexDirection="column" gap={2} mt={3}>
-                        <Button variant="contained" fullWidth onClick={handleSaveBudgetHistory} sx={{ bgcolor: primaryColor, py: 1.5, fontWeight: 700 }}>Save Budget History</Button>
-                        <Button variant="outlined" fullWidth onClick={handleCloseDrawer} sx={{ color: '#64748B', borderColor: '#E2E8F0', py: 1.5, fontWeight: 700 }}>Cancel</Button>
-                    </Box>
+                <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E2E8F0' }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Showing {getCurrentData().length} results
+                    </Typography>
+                    <Pagination count={Math.ceil(getCurrentData().length / 10)} variant="outlined" shape="rounded" size="small" />
                 </Box>
-            </Drawer>
+            </Paper>
         </Box>
     );
 }
