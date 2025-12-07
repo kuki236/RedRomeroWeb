@@ -37,10 +37,11 @@ export default function DonorManagement() {
         if (!token) return;
         try {
             setLoading(true);
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/donors/', {
+            // CAMBIO 1: Actualizar URL
+            const response = await axios.get('http://127.0.0.1:8000/api/finance/donors/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setDonors(response.data); 
+            setDonors(response.data);
         } catch (error) {
             console.error("Error fetching donors:", error);
         } finally {
@@ -52,10 +53,15 @@ export default function DonorManagement() {
         const token = localStorage.getItem('token');
         if (!token) return;
         try {
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/donor-types/', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setDonorTypes(response.data);
+            setLoading(true);
+            // CAMBIO 1: Actualizar URL
+            const response = await axios.get(
+              "http://127.0.0.1:8000/api/finance/donors/",
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
+            setDonors(response.data);
         } catch (error) {
             console.error("Error fetching donor types:", error);
         }
@@ -71,6 +77,12 @@ export default function DonorManagement() {
         if (!token) return;
 
         try {
+            const payload = {
+                name: formData.name,
+                email: formData.email,
+                phone: formData.phone,
+                type_id: formData.type_id || 1 // Valor por defecto si no se selecciona
+            };
             if (formData.donor_id) {
                 // UPDATE
                 await axios.put('http://127.0.0.1:8000/api/admin/donors/update/', {
@@ -85,8 +97,8 @@ export default function DonorManagement() {
                 });
             } else {
                 // CREATE
-                await axios.post('http://127.0.0.1:8000/api/admin/donors/', formData, {
-                   headers: { Authorization: `Bearer ${token}` } 
+                await axios.post('http://127.0.0.1:8000/api/finance/donors/', payload, {
+                    headers: { Authorization: `Bearer ${token}` } 
                 });
             }
             fetchDonors(); 

@@ -155,7 +155,7 @@ export default function EmployeeDashboard() {
                     <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid #E2E8F0', height: '100%' }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                             <Typography variant="h6" fontWeight={700} color="#1E293B">My Approval Activity</Typography>
-                            <Chip label="Approvals Processed" size="small" sx={{ bgcolor: primaryColor, color: 'white', fontWeight: 600 }} />
+                            <Chip label="2025 Trends" size="small" sx={{ bgcolor: primaryColor, color: 'white', fontWeight: 600 }} />
                         </Box>
                         <Box sx={{ height: 300, width: '100%' }}>
                             <ResponsiveContainer width="100%" height="100%">
@@ -178,23 +178,31 @@ export default function EmployeeDashboard() {
                         <Typography variant="body2" color="error.main" fontWeight={600} mb={3}>Requires Your Action</Typography>
 
                         <Box display="flex" flexDirection="column" gap={3}>
-                            {pendingApprovals.map((item) => (
-                                <Box key={item.id} sx={{ borderLeft: `4px solid ${item.urgent ? '#EF4444' : '#F59E0B'}`, pl: 2 }}>
-                                    <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: item.urgent ? '#EF4444' : '#F59E0B' }} />
-                                        <Typography variant="caption" color={item.urgent ? 'error.main' : 'warning.main'} fontWeight={700}>
-                                            {item.type}
-                                        </Typography>
+                            {pendingApprovals.length === 0 ? (
+                                <Typography variant="caption" color="text.secondary">No pending approvals.</Typography>
+                            ) : (
+                                pendingApprovals.map((item) => (
+                                    <Box key={item.id} sx={{ borderLeft: `4px solid ${item.urgent ? '#EF4444' : '#F59E0B'}`, pl: 2 }}>
+                                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                                            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: item.urgent ? '#EF4444' : '#F59E0B' }} />
+                                            <Typography variant="caption" color={item.urgent ? 'error.main' : 'warning.main'} fontWeight={700}>
+                                                {item.type}
+                                            </Typography>
+                                        </Box>
+                                        <Typography variant="subtitle2" fontWeight={700} color="#1E293B">{item.title}</Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block" mb={1}>{item.desc}</Typography>
+                                        
+                                        <Button 
+                                            size="small" 
+                                            variant="outlined" 
+                                            onClick={() => navigate('/employee/aprobaciones')}
+                                            sx={{ textTransform: 'none', py: 0, fontSize: '0.7rem' }}
+                                        >
+                                            Process Request
+                                        </Button>
                                     </Box>
-                                    <Typography variant="subtitle2" fontWeight={700} color="#1E293B">{item.title}</Typography>
-                                    <Typography variant="caption" color="text.secondary" display="block" mb={1}>{item.desc}</Typography>
-                                    <Box display="flex" gap={1}>
-                                        <Typography variant="caption" color="success.main" sx={{ cursor: 'pointer', fontWeight: 700 }}>✔ Approve</Typography>
-                                        <Typography variant="caption" color="error.main" sx={{ cursor: 'pointer', fontWeight: 700 }}>✖ Reject</Typography>
-                                        <Typography variant="caption" color="text.primary" sx={{ cursor: 'pointer', fontWeight: 600 }}>👁 View Details</Typography>
-                                    </Box>
-                                </Box>
-                            ))}
+                                ))
+                            )}
                         </Box>
 
                         {/* --- NAVIGATION TO APPROVALS --- */}
