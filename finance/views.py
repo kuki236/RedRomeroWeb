@@ -168,8 +168,9 @@ class DonationTransactionView(APIView):
             return Response({'error': str(e)}, status=500)
     
     def get(self, request):
-        """Listar historial de donaciones."""
+        """Listar historial de donaciones. Filtra por ONG si el usuario es representante."""
         try:
+            user = request.user
             # Query nativa uniendo tablas para obtener nombres
             query = """
                 SELECT 
@@ -178,16 +179,32 @@ class DonationTransactionView(APIView):
                     dn.donation_date,
                     d.name as donor_name,
                     p.name as project_name,
-                    c.symbol as currency
+                    p.project_id,
+                    c.symbol as currency,
+                    c.currency_code
                 FROM Donation dn
                 JOIN Donor d ON dn.donor_id = d.donor_id
                 JOIN Project p ON dn.project_id = p.project_id
                 JOIN Currency c ON dn.currency_id = c.currency_id
-                ORDER BY dn.donation_date DESC
             """
-            data = fetch_raw_query(query)
+            params = []
+            
+            # Si el usuario es representante, filtrar por su ONG
+            if user.user_role == 'REPRESENTATIVE' and user.representative_id:
+                query += """
+                    JOIN Representative r ON p.representative_id = r.representative_id
+                    WHERE r.representative_id = %s
+                """
+                params.append(user.representative_id)
+            
+            query += " ORDER BY dn.donation_date DESC"
+            
+            data = fetch_raw_query(query, params if params else None)
             return Response(data, status=200)
         except Exception as e:
+            logger.error(f"Error fetching donations: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return Response({'error': str(e)}, status=500)
 
 class BudgetManagementView(APIView):
@@ -303,8 +320,9 @@ class ProjectReportsView(APIView):
             return Response({'error': str(e)}, status=500)
     
     def get(self, request):
-        """Listar reportes de proyectos con JOIN a la tabla de proyectos."""
+        """Listar reportes de proyectos con JOIN a la tabla de proyectos. Filtra por ONG si el usuario es representante."""
         try:
+            user = request.user
             # Usamos alias (AS) para evitar confusiones con los nombres de columnas
             # TO_CHAR convierte la fecha de Oracle a string directo para el JSON
             query = """
@@ -312,16 +330,27 @@ class ProjectReportsView(APIView):
                     r.report_id, 
                     r.title,
                     r.description, 
-                    p.name as project_name, 
+                    p.name as project_name,
+                    p.project_id,
                     TO_CHAR(r.report_date, 'YYYY-MM-DD') as date_str
                 FROM Report r
                 JOIN Project p ON r.project_id = p.project_id
-                ORDER BY r.report_date DESC
             """
+            params = []
+            
+            # Si el usuario es representante, filtrar por su ONG
+            if user.user_role == 'REPRESENTATIVE' and user.representative_id:
+                query += """
+                    JOIN Representative rep ON p.representative_id = rep.representative_id
+                    WHERE rep.representative_id = %s
+                """
+                params.append(user.representative_id)
+            
+            query += " ORDER BY r.report_date DESC"
             
             # Ejecutamos la consulta cruda
             # fetch_raw_query devuelve una lista de diccionarios con claves en minúsculas
-            raw_data = fetch_raw_query(query)
+            raw_data = fetch_raw_query(query, params if params else None)
             
             # Formateamos la respuesta para que coincida EXACTAMENTE con lo que espera React
             response_data = []

@@ -61,13 +61,14 @@ export default function ProjectReports() {
     const fetchProjects = useCallback(async () => {
         const token = localStorage.getItem('token');
         try {
-            // Asegúrate de que este endpoint exista en tu backend o ajusta a la ruta correcta de proyectos
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/projects/', {
+            // Usar el endpoint del representante que filtra por su ONG
+            const response = await axios.get('http://127.0.0.1:8000/api/representative/my-projects/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setProjectsList(response.data);
+            setProjectsList(response.data || []);
         } catch (error) {
             console.error("Error loading projects list:", error);
+            setProjectsList([]);
         }
     }, []);
 

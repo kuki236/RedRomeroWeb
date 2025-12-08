@@ -39,8 +39,8 @@ export default function RequestProjectApproval() {
             try {
                 setLoadingData(true);
                 
-                // 1. Cargar Proyectos
-                const projReq = axios.get('http://127.0.0.1:8000/api/admin/projects/', {
+                // 1. Cargar Proyectos de la ONG del representante
+                const projReq = axios.get('http://127.0.0.1:8000/api/representative/my-projects/', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -51,8 +51,9 @@ export default function RequestProjectApproval() {
 
                 const [projRes, empRes] = await Promise.all([projReq, empReq]);
 
-                setProjects(projRes.data);
-                setEmployees(empRes.data);
+                // El endpoint del representante devuelve proyectos con project_id y name
+                setProjects(projRes.data || []);
+                setEmployees(empRes.data || []);
             } catch (error) {
                 console.error("Error loading resources:", error);
             } finally {

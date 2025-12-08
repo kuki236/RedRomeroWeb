@@ -40,31 +40,49 @@ export default function MyProjects() {
         const token = localStorage.getItem('token');
         try {
             setLoading(true);
-            // Usamos el endpoint de proyectos que ya devuelve info completa
-            const response = await axios.get('http://127.0.0.1:8000/api/admin/projects/', {
+            // Usamos el endpoint del representante que filtra por su ONG
+            const response = await axios.get('http://127.0.0.1:8000/api/representative/my-projects/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             
             // Mapeamos los datos del backend al formato que espera la tabla
-            const mappedProjects = response.data.map(p => ({
-                id: p.project_id,
-                name: p.name,
-                status: p.status || 'Unknown', // status_name desde BD
-                start: p.start_date,
-                end: p.end_date || 'Ongoing',
-                progress: 0, // El endpoint actual de admin/projects no trae progreso financiero (se podría unir)
-                // Datos para el modal
-                description: p.description,
-                ong: p.ong_name,
-                representative: p.representative_name,
-                // Placeholder para datos financieros hasta que actualicemos la vista SQL
-                raised: "See Reports", 
-                goal: "See Budget"
-            }));
+            const mappedProjects = response.data.map(p => {
+                // Formatear fechas si vienen en formato ISO
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return 'Ongoing';
+                    if (dateStr.includes('T')) {
+                        return dateStr.split('T')[0];
+                    }
+                    return dateStr;
+                };
+
+                return {
+                    id: p.project_id,
+                    project_id: p.project_id, // Para el modal
+                    name: p.name,
+                    title: p.name, // Para el modal
+                    status: p.status_name || p.status || 'Unknown',
+                    status_name: p.status_name || p.status || 'Unknown',
+                    start: formatDate(p.start_date),
+                    start_date: p.start_date, // Para el modal
+                    end: formatDate(p.end_date) || 'Ongoing',
+                    end_date: p.end_date, // Para el modal
+                    progress: 0,
+                    // Datos para el modal
+                    description: p.description || 'No description available',
+                    ong: p.ngo_name || 'N/A',
+                    ngo_name: p.ngo_name || 'N/A',
+                    representative: 'Current User',
+                    // Placeholder para datos financieros
+                    raised: "See Reports", 
+                    goal: "See Budget"
+                };
+            });
 
             setProjects(mappedProjects);
         } catch (error) {
             console.error("Error loading projects:", error);
+            setProjects([]);
         } finally {
             setLoading(false);
         }
@@ -73,23 +91,22 @@ export default function MyProjects() {
     // --- HANDLERS ---
     const handleCreateProject = async () => {
         const token = localStorage.getItem('token');
+        if (!newProject.name || !newProject.start_date) {
+            alert("Please fill in at least the project name and start date.");
+            return;
+        }
+        
         try {
-            // Necesitamos el ID de la ONG del usuario. 
-            // OPCIÓN A: Pedirlo en otro endpoint antes.
-            // OPCIÓN B (Rápida): Usar un valor fijo si solo hay una ONG, o pedirlo en el formulario.
-            // Para que funcione YA, asumiremos que el backend maneja la lógica o enviamos un ID válido.
-            
+            // Usamos el endpoint del representante que automáticamente asigna la ONG del usuario
             const payload = {
                 name: newProject.name,
-                description: newProject.description,
+                description: newProject.description || '',
                 start_date: newProject.start_date,
-                end_date: newProject.end_date,
-                project_status_id: newProject.status_id,
-                ong_id: 1, // <--- OJO: Esto debería ser dinámico según el usuario logueado
-                representative_id: null // Se puede asignar después
+                end_date: newProject.end_date || null,
+                project_status_id: newProject.status_id || 1 // Default a PLANIFICACION
             };
 
-            await axios.post('http://127.0.0.1:8000/api/admin/projects/', payload, {
+            await axios.post('http://127.0.0.1:8000/api/representative/my-projects/', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -102,7 +119,8 @@ export default function MyProjects() {
 
         } catch (error) {
             console.error("Error creating project:", error);
-            alert("Failed to create project: " + (error.response?.data?.error || error.message));
+            const errorMsg = error.response?.data?.error || error.message || "Failed to create project";
+            alert(`Error: ${errorMsg}`);
         }
     };
 
@@ -120,7 +138,15 @@ export default function MyProjects() {
     const filtered = projects.filter((p) => {
         const matchName = p.name.toLowerCase().includes(query.toLowerCase());
         // Ajustar filtro de estado para que coincida con los nombres de la BD (ACTIVO, PLANIFICACION, etc)
-        const matchStatus = statusFilter === "all" || p.status.toUpperCase() === statusFilter.toUpperCase();
+        let matchStatus = true;
+        if (statusFilter !== "all") {
+            const projectStatus = (p.status || '').toUpperCase();
+            const filterStatus = statusFilter.toUpperCase();
+            matchStatus = projectStatus === filterStatus || 
+                         (filterStatus === "PLANNING" && projectStatus === "PLANIFICACION") ||
+                         (filterStatus === "ACTIVE" && projectStatus === "ACTIVO") ||
+                         (filterStatus === "COMPLETED" && projectStatus === "COMPLETADO");
+        }
         return matchName && matchStatus;
     });
 

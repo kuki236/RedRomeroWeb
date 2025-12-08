@@ -39,7 +39,14 @@ export default function RepresentativeDashboard() {
     const [reportData, setReportData] = useState({ title: "", description: "", progress: "" });
     const [openFundsModal, setOpenFundsModal] = useState(false);
     const [selectedProjectForFunds, setSelectedProjectForFunds] = useState(null);
-    const [fundsData, setFundsData] = useState({ amount: "", currency: "USD", file: null });
+    const [fundsData, setFundsData] = useState({ 
+        project_id: "", 
+        employee_id: "", 
+        amount: "", 
+        notes: "" 
+    });
+    const [employees, setEmployees] = useState([]);
+    const [submittingFunds, setSubmittingFunds] = useState(false);
     // const [detailsOpen, setDetailsOpen] = useState(false);
     // const [selectedProject, setSelectedProject] = useState(null);
 
@@ -52,8 +59,8 @@ export default function RepresentativeDashboard() {
             try {
                 setLoading(true);
 
-                // 1. Obtener Proyectos (Usamos el endpoint de admin por ahora, filtrado en frontend o idealmente un endpoint propio)
-                const projectsRes = await axios.get('http://127.0.0.1:8000/api/admin/projects/', {
+                // 1. Obtener Proyectos de la ONG del representante
+                const projectsRes = await axios.get('http://127.0.0.1:8000/api/representative/my-projects/', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -66,6 +73,12 @@ export default function RepresentativeDashboard() {
                 const financeRes = await axios.get('http://127.0.0.1:8000/api/finance/reports-analytics/?type=budget_status', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
+
+                // 4. Obtener Empleados (Para asignar aprobación)
+                const employeesRes = await axios.get('http://127.0.0.1:8000/api/admin/employees/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setEmployees(employeesRes.data || []);
 
                 // --- PROCESAMIENTO ---
                 const allProjects = projectsRes.data;
@@ -89,12 +102,25 @@ export default function RepresentativeDashboard() {
                 });
 
                 // Active Projects List (Mapeo para la vista)
-                const activeList = allProjects.filter(p => p.status === 'Active').map(p => {
+                // Filtrar proyectos activos (status_name puede ser 'ACTIVO' o similar)
+                const activeList = allProjects.filter(p => {
+                    const status = p.status_name || p.status || '';
+                    return status.toUpperCase() === 'ACTIVO' || status === 'Active';
+                }).map(p => {
                     // Buscar datos financieros de este proyecto
                     const fin = financeData.find(f => f.project_name === p.name) || {};
                     const raised = fin.total_received || 0;
                     const goal = fin.budget_amount || 0;
                     const percent = goal > 0 ? Math.round((raised / goal) * 100) : 0;
+
+                    // Formatear fechas si vienen en formato ISO
+                    const formatDate = (dateStr) => {
+                        if (!dateStr) return 'Ongoing';
+                        if (dateStr.includes('T')) {
+                            return dateStr.split('T')[0];
+                        }
+                        return dateStr;
+                    };
 
                     return {
                         id: p.project_id,
@@ -103,7 +129,7 @@ export default function RepresentativeDashboard() {
                         raised: `$${raised.toLocaleString()}`,
                         goal: `$${goal.toLocaleString()}`,
                         percent: percent,
-                        timeline: `${p.start_date} - ${p.end_date || 'Ongoing'}`,
+                        timeline: `${formatDate(p.start_date)} - ${formatDate(p.end_date) || 'Ongoing'}`,
                         volunteers: 'N/A', // Dato no disponible en este endpoint aun
                         lastReport: 'Pending' // Dato no disponible
                     };
@@ -112,16 +138,20 @@ export default function RepresentativeDashboard() {
 
                 // Project Status Summary
                 const statusCounts = allProjects.reduce((acc, curr) => {
-                    acc[curr.status] = (acc[curr.status] || 0) + 1;
+                    const status = curr.status_name || curr.status || 'Unknown';
+                    acc[status] = (acc[status] || 0) + 1;
                     return acc;
                 }, {});
                 
-                const statusSummary = Object.keys(statusCounts).map(status => ({
-                    status: status,
-                    count: statusCounts[status],
-                    percent: `${Math.round((statusCounts[status] / allProjects.length) * 100)}%`,
-                    color: status === 'Active' ? "#10B981" : "#F59E0B"
-                }));
+                const statusSummary = Object.keys(statusCounts).map(status => {
+                    const isActive = status.toUpperCase() === 'ACTIVO' || status === 'Active';
+                    return {
+                        status: status,
+                        count: statusCounts[status],
+                        percent: `${Math.round((statusCounts[status] / allProjects.length) * 100)}%`,
+                        color: isActive ? "#10B981" : "#F59E0B"
+                    };
+                });
                 setProjectStatus(statusSummary);
 
                 // Pending Reviews List
@@ -149,11 +179,60 @@ export default function RepresentativeDashboard() {
     const handleReportSubmit = () => { setOpenReportModal(false); }; // Conectar a API real luego
 
     const handleOpenFunds = (projectName) => {
+        // Find project by name to get its ID
+        const project = activeProjects.find(p => p.name === projectName);
         setSelectedProjectForFunds(projectName || "General Project");
+        setFundsData({
+            project_id: project?.id || "",
+            employee_id: "",
+            amount: "",
+            notes: ""
+        });
         setOpenFundsModal(true);
     };
-    const handleCloseFunds = () => setOpenFundsModal(false);
-    const handleFundsSubmit = () => handleCloseFunds();
+    
+    const handleCloseFunds = () => {
+        setOpenFundsModal(false);
+        setSelectedProjectForFunds(null);
+        setFundsData({ project_id: "", employee_id: "", amount: "", notes: "" });
+    };
+    
+    const handleFundsSubmit = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Authentication required. Please log in again.');
+            return;
+        }
+
+        if (!fundsData.project_id || !fundsData.employee_id) {
+            alert('Please select both a project and an employee to assign the approval.');
+            return;
+        }
+
+        try {
+            setSubmittingFunds(true);
+            // Create approval request
+            await axios.post('http://127.0.0.1:8000/api/workflow/approvals/', {
+                project_id: parseInt(fundsData.project_id),
+                employee_id: parseInt(fundsData.employee_id),
+                status_id: 1, // 1 = PENDIENTE
+                notes: fundsData.notes || '' // Optional notes
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            alert('Fund request submitted successfully!');
+            handleCloseFunds();
+            // Reload dashboard data
+            window.location.reload();
+        } catch (error) {
+            console.error("Error submitting fund request:", error);
+            const errorMsg = error.response?.data?.error || error.message || "Failed to submit fund request";
+            alert(`Error: ${errorMsg}`);
+        } finally {
+            setSubmittingFunds(false);
+        }
+    };
 
     if (loading) return <Box display="flex" justifyContent="center" p={10}><CircularProgress /></Box>;
 
@@ -307,9 +386,87 @@ export default function RepresentativeDashboard() {
             </Dialog>
 
             <Dialog open={openFundsModal} onClose={handleCloseFunds} fullWidth maxWidth="sm">
-                <DialogTitle>Request Funds</DialogTitle>
-                <DialogContent><Typography p={2}>Funds Form Here for {selectedProjectForFunds}</Typography></DialogContent>
-                <DialogActions><Button onClick={handleCloseFunds}>Cancel</Button></DialogActions>
+                <Box display="flex" justifyContent="space-between" alignItems="center" p={2} borderBottom="1px solid #f0f0f0">
+                    <DialogTitle sx={{ p: 0, fontWeight: 700 }}>Request Funds</DialogTitle>
+                    <IconButton onClick={handleCloseFunds}><Close /></IconButton>
+                </Box>
+                <DialogContent sx={{ mt: 2 }}>
+                    <Box display="flex" flexDirection="column" gap={3}>
+                        <Typography variant="body2" color="text.secondary">
+                            Request approval for funds for: <strong>{selectedProjectForFunds}</strong>
+                        </Typography>
+
+                        {/* Project Selection (if not pre-selected) */}
+                        {!fundsData.project_id && (
+                            <FormControl fullWidth>
+                                <InputLabel>Project</InputLabel>
+                                <Select
+                                    value={fundsData.project_id}
+                                    label="Project"
+                                    onChange={(e) => setFundsData({...fundsData, project_id: e.target.value})}
+                                >
+                                    {activeProjects.map(p => (
+                                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        )}
+
+                        {/* Employee Selection */}
+                        <FormControl fullWidth>
+                            <InputLabel>Assign Approval To</InputLabel>
+                            <Select
+                                value={fundsData.employee_id}
+                                label="Assign Approval To"
+                                onChange={(e) => setFundsData({...fundsData, employee_id: e.target.value})}
+                            >
+                                {employees.map(e => (
+                                    <MenuItem key={e.employee_id} value={e.employee_id}>
+                                        {e.first_name} {e.last_name} {e.email ? `(${e.email})` : ''}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+
+                        {/* Amount (Optional) */}
+                        <TextField
+                            label="Requested Amount (Optional)"
+                            type="number"
+                            fullWidth
+                            value={fundsData.amount}
+                            onChange={(e) => setFundsData({...fundsData, amount: e.target.value})}
+                            placeholder="Enter amount if applicable"
+                        />
+
+                        {/* Notes/Justification */}
+                        <TextField
+                            label="Justification / Notes"
+                            multiline
+                            rows={4}
+                            fullWidth
+                            value={fundsData.notes}
+                            onChange={(e) => setFundsData({...fundsData, notes: e.target.value})}
+                            placeholder="Add justification or additional notes here..."
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={handleCloseFunds} sx={{ color: 'text.secondary' }}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        onClick={handleFundsSubmit} 
+                        variant="contained"
+                        disabled={submittingFunds || !fundsData.project_id || !fundsData.employee_id}
+                        sx={{ 
+                            bgcolor: primaryColor, 
+                            "&:hover": { bgcolor: '#E63700' },
+                            "&:disabled": { bgcolor: '#ccc' }
+                        }}
+                    >
+                        {submittingFunds ? 'Submitting...' : 'Submit Request'}
+                    </Button>
+                </DialogActions>
             </Dialog>
 
         </Box>

@@ -17,6 +17,7 @@ import {
     InputLabel,
     FormControl,
     Drawer,
+    CircularProgress,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 
@@ -27,66 +28,109 @@ const DARK_ORANGE = "#D93602";
 export default function VolunteerManagement() {
     const [query, setQuery] = useState("");
     const [assignOpen, setAssignOpen] = useState(false);
-    const [volunteers, setVolunteers] = useState([]);
-
-    const [specialty, setSpecialty] = useState("");
-    const [project, setProject] = useState("");
+    const [assignments, setAssignments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    
+    // For assignment drawer
+    const [availableVolunteers, setAvailableVolunteers] = useState([]);
+    const [availableProjects, setAvailableProjects] = useState([]);
+    const [selectedVolunteer, setSelectedVolunteer] = useState("");
+    const [selectedProject, setSelectedProject] = useState("");
 
     useEffect(() => {
-        const fetchVolunteers = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-            try {
-                const specialtyId = specialty || null;
-                const url = specialtyId 
-                    ? `http://127.0.0.1:8000/api/employee/volunteers/assignment/?specialty_id=${specialtyId}`
-                    : 'http://127.0.0.1:8000/api/employee/volunteers/assignment/';
-                const response = await axios.get(url, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                // Transform data - this would need to join with project assignments
-                const transformed = response.data.map(v => ({
-                    id: v.volunteer_id,
-                    name: `${v.first_name} ${v.last_name}`,
-                    specialty: v.specialties || v.specialty_name || 'N/A',
-                    project: 'N/A', // Would need separate query
-                    start: 'N/A',
-                    end: '—',
-                }));
-                setVolunteers(transformed);
-            } catch (error) {
-                console.error("Error fetching volunteers:", error);
-            }
-        };
-        fetchVolunteers();
-    }, [specialty]);
+        fetchAssignments();
+        fetchAvailableData();
+    }, []);
 
-    const handleAssign = async () => {
+    const fetchAssignments = async () => {
         const token = localStorage.getItem('token');
-        if (!token || !project || !specialty) {
-            alert("Please select both project and specialty");
+        if (!token) {
+            setLoading(false);
             return;
         }
         try {
-            // First get volunteer ID from specialty selection
-            // This is simplified - you'd need to select a specific volunteer
+            setLoading(true);
+            const response = await axios.get('http://127.0.0.1:8000/api/employee/volunteers/assignment/?type=assignments', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setAssignments(response.data || []);
+        } catch (error) {
+            console.error("Error fetching assignments:", error);
+            setAssignments([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchAvailableData = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            // Fetch available volunteers
+            const volunteersRes = await axios.get('http://127.0.0.1:8000/api/employee/volunteers/assignment/?type=available', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setAvailableVolunteers(volunteersRes.data || []);
+            
+            // Fetch supervised projects
+            const projectsRes = await axios.get('http://127.0.0.1:8000/api/employee/projects/', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setAvailableProjects(projectsRes.data || []);
+        } catch (error) {
+            console.error("Error fetching available data:", error);
+        }
+    };
+
+    const handleAssign = async () => {
+        const token = localStorage.getItem('token');
+        if (!token || !selectedProject || !selectedVolunteer) {
+            alert("Please select both project and volunteer");
+            return;
+        }
+        try {
             await axios.post('http://127.0.0.1:8000/api/employee/volunteers/assignment/', {
-                project_id: project,
-                volunteer_id: 1 // This should come from selection
+                project_id: selectedProject,
+                volunteer_id: selectedVolunteer
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             alert("Volunteer assigned successfully");
             setAssignOpen(false);
-            window.location.reload();
+            setSelectedVolunteer("");
+            setSelectedProject("");
+            fetchAssignments();
         } catch (error) {
             console.error("Error assigning volunteer:", error);
-            alert("Failed to assign volunteer. Check console for details.");
+            const errorMsg = error.response?.data?.error || error.message || "Failed to assign volunteer";
+            alert(`Error: ${errorMsg}`);
         }
     };
 
-    const filtered = volunteers.filter((v) =>
-        v.name.toLowerCase().includes(query.toLowerCase())
+    const handleRemove = async (assignmentId) => {
+        if (!window.confirm("Are you sure you want to remove this volunteer from the project?")) {
+            return;
+        }
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        try {
+            await axios.delete('http://127.0.0.1:8000/api/employee/volunteers/assignment/', {
+                headers: { Authorization: `Bearer ${token}` },
+                data: { assignment_id: assignmentId }
+            });
+            alert("Volunteer removed successfully");
+            fetchAssignments();
+        } catch (error) {
+            console.error("Error removing volunteer:", error);
+            const errorMsg = error.response?.data?.error || error.message || "Failed to remove volunteer";
+            alert(`Error: ${errorMsg}`);
+        }
+    };
+
+    const filtered = assignments.filter((a) =>
+        a.volunteer_name?.toLowerCase().includes(query.toLowerCase()) ||
+        a.project_name?.toLowerCase().includes(query.toLowerCase())
     );
 
     // Reusable style to make inputs highlight in orange
@@ -148,70 +192,92 @@ export default function VolunteerManagement() {
 
             {/* TABLE */}
             <TableContainer component={Paper} sx={{ borderRadius: 3, overflow: "hidden" }}>
-                <Table>
-                    <TableHead>
-                        <TableRow sx={{ backgroundColor: "#F4F7FB" }}>
-                            <TableCell><strong>Volunteer</strong></TableCell>
-                            <TableCell><strong>Project</strong></TableCell>
-                            <TableCell><strong>Specialty</strong></TableCell>
-                            <TableCell><strong>Start Date</strong></TableCell>
-                            <TableCell><strong>End Date</strong></TableCell>
-                            <TableCell align="right"><strong>Actions</strong></TableCell>
-                        </TableRow>
-                    </TableHead>
-
-                    <TableBody>
-                        {filtered.map((row) => (
-                            <TableRow key={row.id} hover sx={{ height: 64 }}>
-                                <TableCell>{row.name}</TableCell>
-                                <TableCell>{row.project}</TableCell>
-                                <TableCell>{row.specialty}</TableCell>
-                                <TableCell>{row.start}</TableCell>
-                                <TableCell>{row.end}</TableCell>
-                                <TableCell align="right">
-                                    {/* Remove Button se mantiene rojo por seguridad, pero outlineado para limpieza */}
-                                    <Button size="small" color="error" variant="text">
-                                        Remove Volunteer
-                                    </Button>
-                                </TableCell>
+                {loading ? (
+                    <Box display="flex" justifyContent="center" p={5}>
+                        <CircularProgress sx={{ color: MAIN_ORANGE }} />
+                    </Box>
+                ) : filtered.length === 0 ? (
+                    <Box p={5} textAlign="center">
+                        <Typography color="text.secondary">No volunteer assignments found.</Typography>
+                    </Box>
+                ) : (
+                    <Table>
+                        <TableHead>
+                            <TableRow sx={{ backgroundColor: "#F4F7FB" }}>
+                                <TableCell><strong>Volunteer</strong></TableCell>
+                                <TableCell><strong>Project</strong></TableCell>
+                                <TableCell><strong>Specialty</strong></TableCell>
+                                <TableCell><strong>Start Date</strong></TableCell>
+                                <TableCell><strong>End Date</strong></TableCell>
+                                <TableCell align="right"><strong>Actions</strong></TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                        </TableHead>
+
+                        <TableBody>
+                            {filtered.map((assignment) => (
+                                <TableRow key={assignment.assignment_id} hover sx={{ height: 64 }}>
+                                    <TableCell>{assignment.volunteer_name || 'N/A'}</TableCell>
+                                    <TableCell>{assignment.project_name || 'N/A'}</TableCell>
+                                    <TableCell>{assignment.specialties || 'N/A'}</TableCell>
+                                    <TableCell>{assignment.start_date || 'N/A'}</TableCell>
+                                    <TableCell>{assignment.end_date || '—'}</TableCell>
+                                    <TableCell align="right">
+                                        <Button 
+                                            size="small" 
+                                            color="error" 
+                                            variant="text"
+                                            onClick={() => handleRemove(assignment.assignment_id)}
+                                        >
+                                            Remove Volunteer
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
             </TableContainer>
 
             {/* ASSIGN VOLUNTEER DRAWER */}
-            <Drawer anchor="right" open={assignOpen} onClose={() => setAssignOpen(false)}>
+            <Drawer anchor="right" open={assignOpen} onClose={() => {
+                setAssignOpen(false);
+                setSelectedVolunteer("");
+                setSelectedProject("");
+            }}>
                 <Box sx={{ width: 350, p: 3 }}>
                     <Typography variant="h6" fontWeight={700} mb={2}>
                         Assign Volunteer
                     </Typography>
 
-                    {/* SPECIALTY */}
-                    <FormControl fullWidth size="small" sx={{ mb: 2, ...inputStyle }}>
-                        <InputLabel>Specialty</InputLabel>
-                        <Select
-                            value={specialty}
-                            label="Specialty"
-                            onChange={(e) => setSpecialty(e.target.value)}
-                        >
-                            <MenuItem value="Medicine">Medicine</MenuItem>
-                            <MenuItem value="Logistics">Logistics</MenuItem>
-                            <MenuItem value="Psychology">Psychology</MenuItem>
-                        </Select>
-                    </FormControl>
-
                     {/* PROJECT */}
                     <FormControl fullWidth size="small" sx={{ mb: 2, ...inputStyle }}>
                         <InputLabel>Project</InputLabel>
                         <Select
-                            value={project}
+                            value={selectedProject}
                             label="Project"
-                            onChange={(e) => setProject(e.target.value)}
+                            onChange={(e) => setSelectedProject(e.target.value)}
                         >
-                            <MenuItem value="Health Aid Peru">Health Aid Peru</MenuItem>
-                            <MenuItem value="Food Distribution Chile">Food Distribution Chile</MenuItem>
-                            <MenuItem value="Education for All Mexico">Education for All Mexico</MenuItem>
+                            {availableProjects.map((proj) => (
+                                <MenuItem key={proj.id} value={proj.id}>
+                                    {proj.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+
+                    {/* VOLUNTEER */}
+                    <FormControl fullWidth size="small" sx={{ mb: 2, ...inputStyle }}>
+                        <InputLabel>Volunteer</InputLabel>
+                        <Select
+                            value={selectedVolunteer}
+                            label="Volunteer"
+                            onChange={(e) => setSelectedVolunteer(e.target.value)}
+                        >
+                            {availableVolunteers.map((vol) => (
+                                <MenuItem key={vol.volunteer_id} value={vol.volunteer_id}>
+                                    {vol.first_name} {vol.last_name} {vol.specialties ? `(${vol.specialties})` : ''}
+                                </MenuItem>
+                            ))}
                         </Select>
                     </FormControl>
 
@@ -220,11 +286,13 @@ export default function VolunteerManagement() {
                         variant="contained"
                         fullWidth
                         onClick={handleAssign}
+                        disabled={!selectedProject || !selectedVolunteer}
                         sx={{
                             mt: 2,
                             bgcolor: MAIN_ORANGE,
                             fontWeight: 700,
-                            "&:hover": { bgcolor: DARK_ORANGE }
+                            "&:hover": { bgcolor: DARK_ORANGE },
+                            "&:disabled": { bgcolor: "#ccc" }
                         }}
                     >
                         Assign

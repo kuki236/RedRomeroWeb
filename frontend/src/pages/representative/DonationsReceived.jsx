@@ -66,7 +66,7 @@ export default function DonationsReceived() {
                 projectMap[projName].recent.push({
                     donor: d.donor_name,
                     date: d.donation_date, // Asumimos formato YYYY-MM-DD
-                    amount: `${d.currency || '$'} ${amount.toLocaleString()}`
+                    amount: `${d.currency || d.currency_code || '$'} ${amount.toLocaleString()}`
                 });
 
                 globalTotal += amount;
@@ -131,7 +131,7 @@ export default function DonationsReceived() {
             <Box sx={{ display: "flex", gap: 3, mb: 4, flexWrap: "wrap" }}>
                 {/* Total Donations */}
                 <Paper sx={{ p: 2, width: 260, borderRadius: 3 }}>
-                    <Typography fontWeight={600}>Total Donations (Global)</Typography>
+                    <Typography fontWeight={600}>Total Donations</Typography>
                     <Typography variant="h5" fontWeight={900} mt={1}>
                         ${kpis.totalDonations.toLocaleString()}
                     </Typography>

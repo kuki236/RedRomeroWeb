@@ -16,7 +16,7 @@ from users.views import (
     VolunteerProjectAssignmentView, ProjectCategoryAssignmentView, ProjectSDGAssignmentView,
     VolunteerExpertiseMappingView, EmployeeWorkloadAnalysisView,
     # Volunteer endpoints
-    VolunteerMyProjectsView, VolunteerMySpecialtiesView, VolunteerExploreProjectsView,
+    VolunteerDashboardDataView, VolunteerMyProjectsView, VolunteerMySpecialtiesView, VolunteerExploreProjectsView, VolunteerApplyProjectView, VolunteerProjectDetailsView,
     # Representative endpoints
     RepresentativeMyProjectsView, RepresentativeMyNGOView,
     # Employee endpoints
@@ -90,15 +90,19 @@ urlpatterns = [
     path('api/admin/views/employee-workload/', EmployeeWorkloadAnalysisView.as_view(), name='employee_workload_analysis'),
     
     # --- Volunteer Endpoints ---
+    path('api/volunteer/dashboard-data/', VolunteerDashboardDataView.as_view(), name='volunteer_dashboard_data'),
     path('api/volunteer/my-projects/', VolunteerMyProjectsView.as_view(), name='volunteer_my_projects'),
     path('api/volunteer/my-specialties/', VolunteerMySpecialtiesView.as_view(), name='volunteer_my_specialties'),
     path('api/volunteer/explore-projects/', VolunteerExploreProjectsView.as_view(), name='volunteer_explore_projects'),
+    path('api/volunteer/apply-project/', VolunteerApplyProjectView.as_view(), name='volunteer_apply_project'),
+    path('api/volunteer/project-details/<int:project_id>/', VolunteerProjectDetailsView.as_view(), name='volunteer_project_details'),
     
     # --- Representative Endpoints ---
     path('api/representative/my-projects/', RepresentativeMyProjectsView.as_view(), name='representative_my_projects'),
     path('api/representative/my-ngo/', RepresentativeMyNGOView.as_view(), name='representative_my_ngo'),
     
     # --- Employee Endpoints ---
+    path('api/employee/projects/', EmployeeProjectManagementView.as_view(), name='employee_projects_list'),
     path('api/employee/projects/update/', EmployeeProjectManagementView.as_view(), name='employee_projects_update'),
     path('api/employee/volunteers/assignment/', EmployeeVolunteerAssignmentView.as_view(), name='employee_volunteer_assignment'),
     
