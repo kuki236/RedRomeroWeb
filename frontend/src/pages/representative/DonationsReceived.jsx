@@ -1,19 +1,9 @@
 import React, { useState, useEffect } from "react";
+import axios from 'axios';
 import {
-    Box,
-    Typography,
-    Paper,
-    TextField,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Collapse,
-    IconButton,
-    Switch,
-    FormControlLabel,
+    Box, Typography, Paper, TextField, Table, TableBody, TableCell, 
+    TableContainer, TableHead, TableRow, Collapse, IconButton, Switch, 
+    FormControlLabel, CircularProgress
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -24,50 +14,90 @@ const MAIN_ORANGE = "#FF3F01";
 
 export default function DonationsReceived() {
     const [query, setQuery] = useState("");
-    const [timeFilter, setTimeFilter] = useState("7"); // Inicializado con string para coincidir con options
+    const [timeFilter, setTimeFilter] = useState("year"); 
     const [currencyUSD, setCurrencyUSD] = useState(true);
-    const [rows, setRows] = useState([]);
+    const [rows, setRows] = useState([]); // Datos agrupados por proyecto
     const [openRow, setOpenRow] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     const [kpis, setKpis] = useState({
-        totalDonations: 128500,
-        totalDonors: 342,
-        topProject: { name: "Water Relief Kenya", amount: 54000 },
+        totalDonations: 0,
+        totalDonors: 0,
+        topProject: { name: "N/A", amount: 0 },
     });
 
     useEffect(() => {
-        setRows([
-            {
-                id: 1,
-                name: "Water Relief Kenya",
-                total: 54000,
-                usd: 54000,
-                count: 120,
-                recent: [
-                    { donor: "John Doe", date: "2025-01-10", amount: "€300" },
-                    { donor: "Ana Silva", date: "2025-01-12", amount: "$150" },
-                ],
-            },
-            {
-                id: 2,
-                name: "Education for All Mexico",
-                total: 31000,
-                usd: 31000,
-                count: 89,
-                recent: [
-                    { donor: "Marcos León", date: "2025-01-15", amount: "$200" },
-                ],
-            },
-            {
-                id: 3,
-                name: "Food Distribution Chile",
-                total: 43500,
-                usd: 43500,
-                count: 76,
-                recent: [],
-            },
-        ]);
+        fetchDonationsData();
     }, []);
+
+    const fetchDonationsData = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            setLoading(true);
+            // 1. Obtener todas las donaciones
+            const response = await axios.get('http://127.0.0.1:8000/api/finance/donations/', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const rawData = response.data;
+
+            // 2. Procesar Datos: Agrupar por Proyecto
+            const projectMap = {};
+            let globalTotal = 0;
+            const uniqueDonors = new Set();
+
+            rawData.forEach(d => {
+                const projName = d.project_name || "Unknown Project";
+                const amount = parseFloat(d.amount);
+                
+                if (!projectMap[projName]) {
+                    projectMap[projName] = {
+                        id: d.project_id || Math.random(), // Fallback ID
+                        name: projName,
+                        total: 0,
+                        count: 0,
+                        recent: []
+                    };
+                }
+
+                projectMap[projName].total += amount;
+                projectMap[projName].count += 1;
+                projectMap[projName].recent.push({
+                    donor: d.donor_name,
+                    date: d.donation_date, // Asumimos formato YYYY-MM-DD
+                    amount: `${d.currency || d.currency_code || '$'} ${amount.toLocaleString()}`
+                });
+
+                globalTotal += amount;
+                uniqueDonors.add(d.donor_name); // Usamos nombre como ID único simple
+            });
+
+            // Convertir mapa a array
+            const groupedRows = Object.values(projectMap);
+
+            // 3. Calcular KPIs
+            // Encontrar proyecto top
+            let topProj = { name: "N/A", amount: 0 };
+            groupedRows.forEach(p => {
+                if (p.total > topProj.amount) {
+                    topProj = { name: p.name, amount: p.total };
+                }
+            });
+
+            setRows(groupedRows);
+            setKpis({
+                totalDonations: globalTotal,
+                totalDonors: uniqueDonors.size,
+                topProject: topProj
+            });
+
+        } catch (error) {
+            console.error("Error fetching donations:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filtered = rows.filter((r) =>
         r.name.toLowerCase().includes(query.toLowerCase())
@@ -82,6 +112,14 @@ export default function DonationsReceived() {
         },
     };
 
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+                <CircularProgress sx={{ color: MAIN_ORANGE }} />
+            </Box>
+        );
+    }
+
     return (
         <Box sx={{ p: 3 }}>
             {/* ---------- TITLE ---------- */}
@@ -90,10 +128,10 @@ export default function DonationsReceived() {
             </Typography>
 
             {/* ---------- KPI CARDS ---------- */}
-            <Box sx={{ display: "flex", gap: 8, mb: 4, flexWrap: "wrap" }}>
+            <Box sx={{ display: "flex", gap: 3, mb: 4, flexWrap: "wrap" }}>
                 {/* Total Donations */}
                 <Paper sx={{ p: 2, width: 260, borderRadius: 3 }}>
-                    <Typography fontWeight={600}>Total Donations (USD)</Typography>
+                    <Typography fontWeight={600}>Total Donations</Typography>
                     <Typography variant="h5" fontWeight={900} mt={1}>
                         ${kpis.totalDonations.toLocaleString()}
                     </Typography>
@@ -102,7 +140,7 @@ export default function DonationsReceived() {
 
                 {/* Number of Donors */}
                 <Paper sx={{ p: 2, width: 260, borderRadius: 3 }}>
-                    <Typography fontWeight={600}>Number of Donors</Typography>
+                    <Typography fontWeight={600}>Unique Donors</Typography>
                     <Typography variant="h5" fontWeight={900} mt={1}>
                         {kpis.totalDonors}
                     </Typography>
@@ -111,8 +149,8 @@ export default function DonationsReceived() {
 
                 {/* Top Donating Project */}
                 <Paper sx={{ p: 2, width: 260, borderRadius: 3 }}>
-                    <Typography fontWeight={600}>Top Donating Project</Typography>
-                    <Typography variant="h6" fontWeight={900} mt={1}>
+                    <Typography fontWeight={600}>Top Project</Typography>
+                    <Typography variant="h6" fontWeight={900} mt={1} noWrap>
                         {kpis.topProject.name}
                     </Typography>
                     <Typography sx={{ fontWeight: 600 }}>
@@ -131,7 +169,7 @@ export default function DonationsReceived() {
                     mb: 3,
                 }}
             >
-                {/* Search Input (Estilo Naranja aplicado) */}
+                {/* Search Input */}
                 <TextField
                     fullWidth
                     size="small"
@@ -148,7 +186,6 @@ export default function DonationsReceived() {
 
                 {/* Right-aligned filters */}
                 <Box sx={{ display: "flex", gap: 2 }}>
-                    {/* Date Range Dropdown (Estilo Naranja aplicado) */}
                     <TextField
                         select
                         size="small"
@@ -164,23 +201,14 @@ export default function DonationsReceived() {
                         <option value="year">This Year</option>
                     </TextField>
 
-                    {/* USD toggle (Switch Naranja) */}
                     <FormControlLabel
                         control={
                             <Switch
                                 checked={currencyUSD}
                                 onChange={() => setCurrencyUSD(!currencyUSD)}
                                 sx={{
-                                    // Estilos para cambiar el color azul por defecto a naranja
-                                    '& .MuiSwitch-switchBase.Mui-checked': {
-                                        color: MAIN_ORANGE,
-                                        '&:hover': {
-                                            backgroundColor: 'rgba(255, 63, 1, 0.08)',
-                                        },
-                                    },
-                                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                        backgroundColor: MAIN_ORANGE,
-                                    },
+                                    '& .MuiSwitch-switchBase.Mui-checked': { color: MAIN_ORANGE },
+                                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: MAIN_ORANGE },
                                 }}
                             />
                         }
@@ -190,92 +218,85 @@ export default function DonationsReceived() {
             </Paper>
 
             {/* ---------- TABLE ---------- */}
-            <TableContainer
-                component={Paper}
-                sx={{ borderRadius: 3, overflow: "hidden" }}
-            >
+            <TableContainer component={Paper} sx={{ borderRadius: 3, overflow: "hidden" }}>
                 <Table>
                     <TableHead>
                         <TableRow sx={{ backgroundColor: "#F5F7FA" }}>
                             <TableCell><strong>Project Name</strong></TableCell>
                             <TableCell><strong>Total Donations</strong></TableCell>
-                            <TableCell><strong>USD Equivalent</strong></TableCell>
+                            <TableCell><strong>Avg. Donation</strong></TableCell>
                             <TableCell><strong># of Donations</strong></TableCell>
                             <TableCell align="right"><strong>Details</strong></TableCell>
                         </TableRow>
                     </TableHead>
 
                     <TableBody>
-                        {filtered.map((row) => (
-                            <React.Fragment key={row.id}>
-                                {/* MAIN ROW */}
-                                <TableRow hover>
-                                    <TableCell>{row.name}</TableCell>
-                                    <TableCell>${row.total.toLocaleString()}</TableCell>
-                                    <TableCell>${row.usd.toLocaleString()}</TableCell>
-                                    <TableCell>{row.count}</TableCell>
-                                    <TableCell align="right">
-                                        {/* Botón de flecha: Naranja si está abierto */}
-                                        <IconButton
-                                            onClick={() => setOpenRow(openRow === row.id ? null : row.id)}
-                                            sx={{
-                                                color: openRow === row.id ? MAIN_ORANGE : 'default',
-                                                transition: 'color 0.3s'
-                                            }}
-                                        >
-                                            {openRow === row.id ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                                        </IconButton>
-                                    </TableCell>
-                                </TableRow>
+                        {filtered.length === 0 ? (
+                             <TableRow>
+                                <TableCell colSpan={5} align="center" sx={{ py: 3 }}>No donations found.</TableCell>
+                             </TableRow>
+                        ) : (
+                            filtered.map((row) => (
+                                <React.Fragment key={row.name}>
+                                    {/* MAIN ROW */}
+                                    <TableRow hover>
+                                        <TableCell>{row.name}</TableCell>
+                                        <TableCell>${row.total.toLocaleString()}</TableCell>
+                                        <TableCell>${Math.round(row.total / row.count).toLocaleString()}</TableCell>
+                                        <TableCell>{row.count}</TableCell>
+                                        <TableCell align="right">
+                                            <IconButton
+                                                onClick={() => setOpenRow(openRow === row.name ? null : row.name)}
+                                                sx={{
+                                                    color: openRow === row.name ? MAIN_ORANGE : 'default',
+                                                    transition: 'color 0.3s'
+                                                }}
+                                            >
+                                                {openRow === row.name ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                                            </IconButton>
+                                        </TableCell>
+                                    </TableRow>
 
-                                {/* EXPANDABLE SECTION */}
-                                <TableRow>
-                                    <TableCell
-                                        colSpan={5}
-                                        sx={{ p: 0, backgroundColor: "#FAFAFA", borderBottom: "none" }}
-                                    >
-                                        <Collapse in={openRow === row.id} timeout="auto" unmountOnExit>
-                                            <Box sx={{ p: 2, pl: 4 }}>
-                                                <Typography fontWeight={700} sx={{ mb: 1, color: "text.primary" }}>
-                                                    Recent Donations
-                                                </Typography>
-
-                                                {row.recent.length === 0 ? (
-                                                    <Typography color="text.secondary" fontSize={14}>
-                                                        No recent donations recorded.
+                                    {/* EXPANDABLE SECTION */}
+                                    <TableRow>
+                                        <TableCell colSpan={5} sx={{ p: 0, backgroundColor: "#FAFAFA", borderBottom: "none" }}>
+                                            <Collapse in={openRow === row.name} timeout="auto" unmountOnExit>
+                                                <Box sx={{ p: 2, pl: 4 }}>
+                                                    <Typography fontWeight={700} sx={{ mb: 1, color: "text.primary" }}>
+                                                        Recent Donations
                                                     </Typography>
-                                                ) : (
-                                                    row.recent.map((d, index) => (
-                                                        <Paper
-                                                            key={index}
-                                                            variant="outlined"
-                                                            sx={{
-                                                                p: 1.5,
-                                                                mb: 1,
-                                                                display: "flex",
-                                                                justifyContent: "space-between",
-                                                                borderRadius: 2,
-                                                                borderColor: "#E0E0E0"
-                                                            }}
-                                                        >
-                                                            <Box>
-                                                                <Typography fontWeight={600}>{d.donor}</Typography>
-                                                                <Typography fontSize={13} color="text.secondary">
-                                                                    {d.date}
-                                                                </Typography>
-                                                            </Box>
-                                                            <Typography fontWeight={700} color={MAIN_ORANGE}>
-                                                                {d.amount}
-                                                            </Typography>
-                                                        </Paper>
-                                                    ))
-                                                )}
-                                            </Box>
-                                        </Collapse>
-                                    </TableCell>
-                                </TableRow>
-                            </React.Fragment>
-                        ))}
+
+                                                    {row.recent.length === 0 ? (
+                                                        <Typography color="text.secondary" fontSize={14}>
+                                                            No recent donations recorded.
+                                                        </Typography>
+                                                    ) : (
+                                                        // Mostramos solo las últimas 5 donaciones
+                                                        row.recent.slice(0, 5).map((d, index) => (
+                                                            <Paper
+                                                                key={index}
+                                                                variant="outlined"
+                                                                sx={{
+                                                                    p: 1.5, mb: 1,
+                                                                    display: "flex", justifyContent: "space-between",
+                                                                    borderRadius: 2, borderColor: "#E0E0E0"
+                                                                }}
+                                                            >
+                                                                <Box>
+                                                                    <Typography fontWeight={600}>{d.donor}</Typography>
+                                                                    <Typography fontSize={13} color="text.secondary">{new Date(d.date).toLocaleDateString()}</Typography>
+                                                                </Box>
+                                                                <Typography fontWeight={700} color={MAIN_ORANGE}>{d.amount}</Typography>
+                                                            </Paper>
+                                                        ))
+                                                    )}
+                                                </Box>
+                                            </Collapse>
+                                        </TableCell>
+                                    </TableRow>
+                                </React.Fragment>
+                            ))
+                        )}
                     </TableBody>
                 </Table>
             </TableContainer>

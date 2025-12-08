@@ -21,7 +21,8 @@ import {
     Drawer,
     CircularProgress,
     Grid,
-    InputBase
+    InputBase,
+    Pagination
     } from '@mui/material';
     import {
     Search,
@@ -38,7 +39,11 @@ import {
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [currentTab, setCurrentTab] = useState(0); // reserved for future use
+    const [currentTab, setCurrentTab] = useState(0);
+    
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const rowsPerPage = 6;
 
     // Drawer & Form State
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -56,18 +61,23 @@ import {
     // --- API CALLS ---
     const fetchEmployees = async () => {
         const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('No token found');
+            return;
+        }
         try {
-        setLoading(true);
-        // Replace endpoint with yours
-        const res = await axios.get('http://127.0.0.1:8000/api/admin/employees/', {
-            headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        setEmployees(Array.isArray(res.data) ? res.data : []);
+            setLoading(true);
+            const res = await axios.get('http://127.0.0.1:8000/api/admin/employees/', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setEmployees(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
-        console.error('Error fetching employees:', err);
-        // fallback to mock if desired
+            console.error('Error fetching employees:', err);
+            if (err.response?.status === 401) {
+                alert('Session expired. Please log in again.');
+            }
         } finally {
-        setLoading(false);
+            setLoading(false);
         }
     };
 
@@ -76,53 +86,89 @@ import {
     }, []);
 
     const handleSaveEmployee = async () => {
-        // basic validation
+        // Basic validation
         const required = ['first_name', 'last_name', 'birth_date', 'email', 'hire_date'];
         for (const field of required) {
-        if (!formData[field]) {
-            alert(`Please fill ${field.replace('_', ' ')}.`);
-            return;
+            if (!formData[field]) {
+                const fieldName = field.replace('_', ' ');
+                alert(`Please fill in ${fieldName}.`);
+                return;
+            }
         }
+        
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            alert('Please enter a valid email address.');
+            return;
         }
 
         const token = localStorage.getItem('token');
-        try {
-        if (formData.employee_id) {
-            // UPDATE
-            await axios.put('http://127.0.0.1:8000/api/admin/employees/update/', formData, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-        } else {
-            // CREATE
-            await axios.post('http://127.0.0.1:8000/api/admin/employees/', formData, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
+        if (!token) {
+            alert('Authentication required. Please log in again.');
+            return;
         }
-        await fetchEmployees();
-        handleCloseDrawer();
+
+        try {
+            if (formData.employee_id) {
+                // UPDATE - Send only fields that backend accepts
+                const updateData = {
+                    employee_id: formData.employee_id,
+                    first_name: formData.first_name,
+                    last_name: formData.last_name,
+                    email: formData.email,
+                    phone: formData.phone || '',
+                    address: formData.address || ''
+                };
+                await axios.put('http://127.0.0.1:8000/api/admin/employees/update/', updateData, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            } else {
+                // CREATE - Send all required fields
+                await axios.post('http://127.0.0.1:8000/api/admin/employees/', formData, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            }
+            await fetchEmployees();
+            handleCloseDrawer();
         } catch (err) {
-        console.error('Error saving employee:', err);
-        alert('Failed to save employee. Check console for details.');
+            console.error('Error saving employee:', err);
+            if (err.response?.status === 401) {
+                alert('Session expired. Please log in again.');
+                // Optionally redirect to login
+                // window.location.href = '/login';
+            } else {
+                const errorMessage = err.response?.data?.error || err.message || 'Failed to save employee.';
+                alert(`Error: ${errorMessage}. Please check console for details.`);
+            }
         }
     };
 
     const handleDeleteEmployee = async (id) => {
-        if (!confirm('Delete employee?')) return;
+        if (!window.confirm('Are you sure you want to delete this employee?')) return;
         const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Authentication required. Please log in again.');
+            return;
+        }
         try {
-        await axios.delete(`http://127.0.0.1:8000/api/admin/employees/${id}/`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        setEmployees(prev => prev.filter(e => e.employee_id !== id));
+            await axios.delete(`http://127.0.0.1:8000/api/admin/employees/${id}/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await fetchEmployees(); // Refresh the list
         } catch (err) {
-        console.error('Error deleting employee:', err);
-        alert('Failed to delete employee.');
+            console.error('Error deleting employee:', err);
+            const errorMessage = err.response?.data?.error || err.message || 'Failed to delete employee.';
+            alert(`Error: ${errorMessage}`);
         }
     };
 
     // --- HANDLERS ---
     const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
-    const handleTabChange = (event, newValue) => setCurrentTab(newValue);
+    const handleTabChange = (event, newValue) => {
+        setCurrentTab(newValue);
+        setPage(1); // Reset to first page when tab changes
+    };
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -130,16 +176,16 @@ import {
 
     const handleOpenDrawer = (employee = null) => {
         if (employee) {
-        // Edit Mode
+        // Edit Mode - Format dates to remove time component
         setFormData({
             employee_id: employee.employee_id,
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
-            birth_date: employee.birth_date || '',
+            birth_date: formatDateForInput(employee.birth_date) || '',
             address: employee.address || '',
             email: employee.email || '',
             phone: employee.phone || '',
-            hire_date: employee.hire_date || ''
+            hire_date: formatDateForInput(employee.hire_date) || ''
         });
         } else {
         // New Employee Mode
@@ -159,17 +205,86 @@ import {
 
     const handleCloseDrawer = () => setIsDrawerOpen(false);
 
-    // --- FILTERING ---
+    // Format date to show only date without time
+    const formatDate = (dateString) => {
+        if (!dateString) return '-';
+        // If it's in ISO format with time, extract only the date part
+        if (dateString.includes('T')) {
+            return dateString.split('T')[0];
+        }
+        return dateString;
+    };
+
+    // Format date for input field (YYYY-MM-DD)
+    const formatDateForInput = (dateString) => {
+        if (!dateString) return '';
+        if (dateString.includes('T')) {
+            return dateString.split('T')[0];
+        }
+        return dateString;
+    };
+
+    // --- FILTERING & PAGINATION ---
     const getFilteredEmployees = () => {
         let filtered = employees;
+        
+        // Apply search filter
         if (searchTerm) {
-        filtered = filtered.filter(e =>
-            (`${e.first_name} ${e.last_name}`.toLowerCase().includes(searchTerm)) ||
-            (e.email && e.email.toLowerCase().includes(searchTerm))
-        );
+            filtered = filtered.filter(e =>
+                (`${e.first_name} ${e.last_name}`.toLowerCase().includes(searchTerm)) ||
+                (e.email && e.email.toLowerCase().includes(searchTerm))
+            );
         }
+        
+        // Apply tab filter
+        if (currentTab === 1) {
+            // Recently Hired (within 1 year)
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            filtered = filtered.filter(e => {
+                if (!e.hire_date) return false;
+                try {
+                    const hireDate = new Date(e.hire_date);
+                    return hireDate >= oneYearAgo;
+                } catch {
+                    return false;
+                }
+            });
+        } else if (currentTab === 2) {
+            // Long-term (more than 1 year)
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            filtered = filtered.filter(e => {
+                if (!e.hire_date) return false;
+                try {
+                    const hireDate = new Date(e.hire_date);
+                    return hireDate < oneYearAgo;
+                } catch {
+                    return false;
+                }
+            });
+        }
+        
         return filtered;
     };
+
+    const getPaginatedEmployees = () => {
+        const filtered = getFilteredEmployees();
+        const startIndex = (page - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        return filtered.slice(startIndex, endIndex);
+    };
+
+    const handlePageChange = (event, newPage) => {
+        setPage(newPage);
+        // Scroll to top of table when page changes
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Reset to page 1 when search term or tab changes
+    useEffect(() => {
+        setPage(1);
+    }, [searchTerm, currentTab]);
 
     const getStatusChip = (hireDate) => {
         // example: show a chip if recently hired (within a year) else default
@@ -266,16 +381,22 @@ import {
                         <CircularProgress sx={{ color: primaryColor }} />
                     </TableCell>
                     </TableRow>
+                ) : getPaginatedEmployees().length === 0 ? (
+                    <TableRow>
+                        <TableCell colSpan={7} align="center" sx={{ py: 5, color: '#94A3B8' }}>
+                            No employees found
+                        </TableCell>
+                    </TableRow>
                 ) : (
-                    getFilteredEmployees().map((emp) => (
+                    getPaginatedEmployees().map((emp) => (
                     <TableRow key={emp.employee_id} hover>
                         <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
                         {emp.first_name} {emp.last_name}
                         </TableCell>
                         <TableCell sx={{ color: '#64748B' }}>{emp.email}</TableCell>
-                        <TableCell sx={{ color: '#1E293B' }}>{emp.birth_date}</TableCell>
-                        <TableCell sx={{ color: '#64748B' }}>{emp.phone}</TableCell>
-                        <TableCell sx={{ color: '#1E293B' }}>{emp.hire_date}</TableCell>
+                        <TableCell sx={{ color: '#1E293B' }}>{formatDate(emp.birth_date)}</TableCell>
+                        <TableCell sx={{ color: '#64748B' }}>{emp.phone || '-'}</TableCell>
+                        <TableCell sx={{ color: '#1E293B' }}>{formatDate(emp.hire_date)}</TableCell>
                         <TableCell>{getStatusChip(emp.hire_date)}</TableCell>
                         <TableCell align="right">
                         <IconButton size="small" onClick={() => handleOpenDrawer(emp)}>
@@ -292,6 +413,36 @@ import {
                 </TableBody>
             </Table>
             </TableContainer>
+
+            {/* PAGINATION */}
+            {!loading && getFilteredEmployees().length > 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, pt: 3, borderTop: '1px solid #E2E8F0' }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Showing {((page - 1) * rowsPerPage) + 1} to {Math.min(page * rowsPerPage, getFilteredEmployees().length)} of {getFilteredEmployees().length} employees
+                    </Typography>
+                    <Pagination
+                        count={Math.ceil(getFilteredEmployees().length / rowsPerPage)}
+                        page={page}
+                        onChange={handlePageChange}
+                        color="primary"
+                        sx={{
+                            '& .MuiPaginationItem-root': {
+                                color: '#64748B',
+                                '&.Mui-selected': {
+                                    backgroundColor: primaryColor,
+                                    color: 'white',
+                                    '&:hover': {
+                                        backgroundColor: '#D93602',
+                                    },
+                                },
+                                '&:hover': {
+                                    backgroundColor: '#FFF5F0',
+                                },
+                            },
+                        }}
+                    />
+                </Box>
+            )}
         </Paper>
 
         {/* DYNAMIC DRAWER (FORM) */}

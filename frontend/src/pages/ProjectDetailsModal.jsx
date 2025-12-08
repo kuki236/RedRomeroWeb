@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions, // Importado para colocar los botones al final
+    DialogActions,
     IconButton,
     Typography,
     Box,
@@ -18,8 +19,9 @@ import {
     Chip,
     Avatar,
     Paper,
-    Button,      // Nuevo
-    TextField    // Nuevo
+    Button,
+    TextField,
+    CircularProgress
 } from "@mui/material";
 import {
     Close as CloseIcon,
@@ -27,35 +29,168 @@ import {
     Person as PersonIcon,
     Business as BusinessIcon,
     MonetizationOn as MonetizationOnIcon,
-    Edit as EditIcon, // Nuevo icono
-    Save as SaveIcon  // Nuevo icono
+    Edit as EditIcon,
+    Save as SaveIcon,
+    LocationOn as LocationOnIcon,
+    People as PeopleIcon,
+    AccessTime as AccessTimeIcon,
+    Star as StarIcon
 } from "@mui/icons-material";
 
 // Constante de color corporativo
 const MAIN_ORANGE = "#FF3F01";
 
-// --- SIMULACIÓN DE AUTH (En tu app real esto viene de un Context o Hook) ---
-// Cambia esto a "VOLUNTEER" para probar que el botón desaparece.
-const CURRENT_USER_ROLE = "VOLUNTEER";
-
 const ProjectDetailsModal = ({ open, onClose, project }) => {
     // Estados para la edición
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({});
+    const [loadingDetails, setLoadingDetails] = useState(false);
+    const [projectDetails, setProjectDetails] = useState(null);
 
     useEffect(() => {
-        if (project) {
-            setFormData(project);
+        if (project && open) {
+            fetchProjectDetails();
+            // Format date for display
+            const formatDate = (dateStr) => {
+                if (!dateStr) return 'N/A';
+                if (dateStr.includes('T')) {
+                    return dateStr.split('T')[0];
+                }
+                return dateStr;
+            };
+
+            setFormData({
+                title: project.name || project.title,
+                ong: project.ong || project.ngo_name || 'N/A',
+                status: project.status || project.status_name || 'Unknown',
+                description: project.description || 'No description available',
+                date: formatDate(project.start || project.start_date),
+                totalBudget: project.goal || 'N/A',
+                submittedBy: project.representative || 'N/A'
+            });
             setIsEditing(false);
         }
     }, [project, open]);
 
+    const fetchProjectDetails = async () => {
+        const projectId = project?.id || project?.project_id;
+        if (!projectId) return;
+        
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            setLoadingDetails(true);
+            
+            if (isVolunteer) {
+                // For volunteers: fetch project-specific info (location, specialties, team)
+                try {
+                    const projectInfoRes = await axios.get(
+                        `http://127.0.0.1:8000/api/volunteer/project-details/${projectId}/`, 
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    
+                    const projectInfo = projectInfoRes.data;
+                    setProjectDetails({
+                        location: projectInfo.location || project?.location || 'N/A',
+                        city: projectInfo.city || 'N/A',
+                        country: projectInfo.country || 'N/A',
+                        duration: projectInfo.duration_weeks || project?.tags?.duration || 'N/A',
+                        currentVolunteers: projectInfo.current_volunteers || 0,
+                        teamMembers: projectInfo.team_members || [],
+                        specialties: projectInfo.specialties || []
+                    });
+                } catch (error) {
+                    console.error("Error fetching volunteer project details:", error);
+                    // Fallback to project data passed as prop
+                    setProjectDetails({
+                        location: project?.location || 'N/A',
+                        city: 'N/A',
+                        country: 'N/A',
+                        duration: project?.tags?.duration || 'N/A',
+                        currentVolunteers: 0,
+                        teamMembers: [],
+                        specialties: project?.tags?.specialty ? [project.tags.specialty] : []
+                    });
+                }
+            } else {
+                // For other roles: fetch approvals and donations
+                const [approvalsRes, donationsRes] = await Promise.all([
+                    axios.get('http://127.0.0.1:8000/api/workflow/approvals/', {
+                        headers: { Authorization: `Bearer ${token}` }
+                    }).catch(() => ({ data: [] })),
+                    axios.get('http://127.0.0.1:8000/api/finance/donations/', {
+                        headers: { Authorization: `Bearer ${token}` }
+                    }).catch(() => ({ data: [] }))
+                ]);
+
+                const allApprovals = approvalsRes.data || [];
+                const allDonations = donationsRes.data || [];
+
+                // Filter by project_id
+                const approvals = allApprovals.filter(a => 
+                    (a.project_id === projectId) || 
+                    (a.project && a.project.toLowerCase().includes(project.name?.toLowerCase() || ''))
+                );
+                
+                const donations = allDonations.filter(d => 
+                    (d.project_id === projectId) ||
+                    (d.project_name && d.project_name.toLowerCase() === project.name?.toLowerCase())
+                );
+
+                // Map approvals to history format
+                const history = approvals.map(a => ({
+                    status: a.approval_status || a.status || 'Pending',
+                    date: a.approval_date || a.date || a.approval_date_val || 'N/A',
+                    user: a.employee_name || a.assigned_to || a.assigned_employee || 'System'
+                }));
+
+                // Map donations to budget breakdown
+                const budgetBreakdown = donations.map(d => ({
+                    item: `Donation from ${d.donor_name || 'Anonymous'}`,
+                    date: d.donation_date || d.date || 'N/A',
+                    currency: d.currency || d.currency_code || 'USD',
+                    amount: `$${parseFloat(d.amount || 0).toLocaleString()}`
+                }));
+
+                // Calculate total budget from donations or use placeholder
+                const totalDonations = donations.reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
+                const totalBudget = totalDonations > 0 
+                    ? `$${totalDonations.toLocaleString()}`
+                    : (project.goal || 'N/A');
+
+                setProjectDetails({
+                    history,
+                    budgetBreakdown,
+                    totalBudget,
+                    donations
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching project details:", error);
+            setProjectDetails(isVolunteer ? {
+                location: project?.location || 'N/A',
+                currentVolunteers: 0,
+                teamMembers: [],
+                specialties: []
+            } : {
+                history: [],
+                budgetBreakdown: [],
+                totalBudget: project?.goal || 'N/A'
+            });
+        } finally {
+            setLoadingDetails(false);
+        }
+    };
+
     // Si no hay proyecto, retornar null
     if (!project) return null;
 
-    // Lógica de Permisos
+    // Get user role from localStorage or context
+    const userRole = localStorage.getItem('userRole') || 'REPRESENTATIVE';
     const ALLOWED_ROLES = ["ADMIN", "REPRESENTATIVE", "EMPLOYEE"];
-    const canEdit = ALLOWED_ROLES.includes(CURRENT_USER_ROLE);
+    const canEdit = ALLOWED_ROLES.includes(userRole);
+    const isVolunteer = userRole === 'VOLUNTEER';
 
     // Handlers
     const handleInputChange = (e) => {
@@ -147,65 +282,102 @@ const ProjectDetailsModal = ({ open, onClose, project }) => {
                 {/* ---------------- KPI GRID REESTRUCTURADO ---------------- */}
                 <Grid container spacing={2} sx={{ mb: 4 }}>
 
-                    {/* 1. SUBMITTED BY */}
-                    <Grid item xs={12}>
-                        <Paper
-                            variant="outlined"
-                            sx={{
-                                p: 2, display: "flex", alignItems: "center", gap: 3,
-                                borderRadius: 2, borderColor: "#E2E8F0", bgcolor: "#FAFAFA"
-                            }}
-                        >
-                            <Avatar sx={{ width: 56, height: 56, bgcolor: "rgba(255, 63, 1, 0.1)", color: MAIN_ORANGE }}>
-                                <PersonIcon fontSize="large" />
-                            </Avatar>
-                            <Box>
-                                <Typography variant="caption" color="text.secondary" fontWeight={700} letterSpacing={1}>
-                                    SUBMITTED BY
-                                </Typography>
-                                <Typography variant="h5" fontWeight={800} color="#1E293B">
-                                    {formData.submittedBy}
-                                </Typography>
-                            </Box>
-                        </Paper>
-                    </Grid>
+                    {/* 1. SUBMITTED BY (only for non-volunteers) */}
+                    {!isVolunteer && (
+                        <Grid item xs={12}>
+                            <Paper
+                                variant="outlined"
+                                sx={{
+                                    p: 2, display: "flex", alignItems: "center", gap: 3,
+                                    borderRadius: 2, borderColor: "#E2E8F0", bgcolor: "#FAFAFA"
+                                }}
+                            >
+                                <Avatar sx={{ width: 56, height: 56, bgcolor: "rgba(255, 63, 1, 0.1)", color: MAIN_ORANGE }}>
+                                    <PersonIcon fontSize="large" />
+                                </Avatar>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary" fontWeight={700} letterSpacing={1}>
+                                        SUBMITTED BY
+                                    </Typography>
+                                    <Typography variant="h5" fontWeight={800} color="#1E293B">
+                                        {formData.submittedBy || project?.representative || 'N/A'}
+                                    </Typography>
+                                </Box>
+                            </Paper>
+                        </Grid>
+                    )}
 
                     {/* 2. DATE */}
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12} sm={isVolunteer ? 6 : 6}>
                         <Paper variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 2, borderRadius: 2, borderColor: "#E2E8F0" }}>
                             <Avatar sx={{ bgcolor: "rgba(255, 63, 1, 0.1)", color: MAIN_ORANGE }}>
                                 <CalendarTodayIcon />
                             </Avatar>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" fontWeight={700}>DATE</Typography>
-                                <Typography variant="body1" fontWeight={600}>{formData.date}</Typography>
+                                <Typography variant="caption" color="text.secondary" fontWeight={700}>START DATE</Typography>
+                                <Typography variant="body1" fontWeight={600}>
+                                    {formData.date || project?.start || project?.start_date || project?.tags?.start || 'N/A'}
+                                </Typography>
                             </Box>
                         </Paper>
                     </Grid>
 
-                    {/* 3. BUDGET (Editable) */}
-                    <Grid item xs={12} sm={6}>
-                        <Paper variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 2, borderRadius: 2, borderColor: "#E2E8F0" }}>
-                            <Avatar sx={{ bgcolor: "rgba(255, 63, 1, 0.1)", color: MAIN_ORANGE }}>
-                                <MonetizationOnIcon />
-                            </Avatar>
-                            <Box width="100%">
-                                <Typography variant="caption" color="text.secondary" fontWeight={700}>TOTAL BUDGET</Typography>
-                                {isEditing ? (
-                                    <TextField
-                                        fullWidth
-                                        name="totalBudget"
-                                        value={formData.totalBudget || ""}
-                                        onChange={handleInputChange}
-                                        variant="standard"
-                                        size="small"
-                                    />
-                                ) : (
-                                    <Typography variant="body1" fontWeight={600}>{formData.totalBudget}</Typography>
-                                )}
-                            </Box>
-                        </Paper>
-                    </Grid>
+                    {/* 3. BUDGET (only for non-volunteers) or LOCATION/DURATION (for volunteers) */}
+                    {isVolunteer ? (
+                        <>
+                            <Grid item xs={12} sm={6}>
+                                <Paper variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 2, borderRadius: 2, borderColor: "#E2E8F0" }}>
+                                    <Avatar sx={{ bgcolor: "rgba(255, 63, 1, 0.1)", color: MAIN_ORANGE }}>
+                                        <LocationOnIcon />
+                                    </Avatar>
+                                    <Box width="100%">
+                                        <Typography variant="caption" color="text.secondary" fontWeight={700}>LOCATION</Typography>
+                                        <Typography variant="body1" fontWeight={600}>
+                                            {projectDetails?.location || project?.location || 'N/A'}
+                                        </Typography>
+                                    </Box>
+                                </Paper>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <Paper variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 2, borderRadius: 2, borderColor: "#E2E8F0" }}>
+                                    <Avatar sx={{ bgcolor: "rgba(255, 63, 1, 0.1)", color: MAIN_ORANGE }}>
+                                        <AccessTimeIcon />
+                                    </Avatar>
+                                    <Box width="100%">
+                                        <Typography variant="caption" color="text.secondary" fontWeight={700}>DURATION</Typography>
+                                        <Typography variant="body1" fontWeight={600}>
+                                            {projectDetails?.duration || project?.tags?.duration || 'N/A'}
+                                        </Typography>
+                                    </Box>
+                                </Paper>
+                            </Grid>
+                        </>
+                    ) : (
+                        <Grid item xs={12} sm={6}>
+                            <Paper variant="outlined" sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 2, borderRadius: 2, borderColor: "#E2E8F0" }}>
+                                <Avatar sx={{ bgcolor: "rgba(255, 63, 1, 0.1)", color: MAIN_ORANGE }}>
+                                    <MonetizationOnIcon />
+                                </Avatar>
+                                <Box width="100%">
+                                    <Typography variant="caption" color="text.secondary" fontWeight={700}>TOTAL BUDGET</Typography>
+                                    {isEditing ? (
+                                        <TextField
+                                            fullWidth
+                                            name="totalBudget"
+                                            value={formData.totalBudget || ""}
+                                            onChange={handleInputChange}
+                                            variant="standard"
+                                            size="small"
+                                        />
+                                    ) : (
+                                        <Typography variant="body1" fontWeight={600}>
+                                            {projectDetails?.totalBudget || formData.totalBudget || 'N/A'}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </Paper>
+                        </Grid>
+                    )}
                 </Grid>
 
                 {/* ---------------- DESCRIPTION (Editable) ---------------- */}
@@ -231,96 +403,179 @@ const ProjectDetailsModal = ({ open, onClose, project }) => {
                 </Box>
 
                 <Grid container spacing={4}>
-                    {/* ---------------- APPROVAL HISTORY ---------------- */}
-                    <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                            Approval History
-                        </Typography>
-                        <Box sx={{ ml: 1, borderLeft: "2px solid #E2E8F0", pl: 3, py: 1 }}>
-                            {formData.history?.map((step, index) => (
-                                <Box key={index} sx={{ mb: 3, position: "relative" }}>
-                                    <Box
-                                        sx={{
-                                            position: "absolute", left: -31, top: 4, width: 12, height: 12, borderRadius: "50%",
-                                            bgcolor: index === formData.history.length - 1 ? MAIN_ORANGE : "#CBD5E1",
-                                            border: "2px solid white",
-                                            boxShadow: index === formData.history.length - 1 ? `0 0 0 3px rgba(255, 63, 1, 0.2)` : "none"
-                                        }}
-                                    />
-                                    <Typography variant="body2" fontWeight={700} color="#1E293B">{step.status}</Typography>
-                                    <Box display="flex" justifyContent="space-between" width="90%">
-                                        <Typography variant="caption" color="text.secondary">{step.date}</Typography>
-                                        <Typography variant="caption" color="text.secondary" fontStyle="italic">{step.user}</Typography>
-                                    </Box>
+                    {isVolunteer ? (
+                        <>
+                            {/* ---------------- SPECIALTIES REQUIRED ---------------- */}
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                                    <StarIcon sx={{ verticalAlign: 'middle', mr: 1, fontSize: 20, color: MAIN_ORANGE }} />
+                                    Specialties Required
+                                </Typography>
+                                <Box display="flex" flexWrap="wrap" gap={1}>
+                                    {projectDetails?.specialties?.length > 0 ? (
+                                        projectDetails.specialties.map((spec, index) => (
+                                            <Chip
+                                                key={index}
+                                                label={spec}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: "rgba(255, 63, 1, 0.08)",
+                                                    color: MAIN_ORANGE,
+                                                    fontWeight: 600,
+                                                    border: "1px solid rgba(255, 63, 1, 0.2)"
+                                                }}
+                                            />
+                                        ))
+                                    ) : (
+                                        <Typography variant="caption" color="text.secondary">
+                                            {project?.tags?.specialty || 'Various specialties accepted'}
+                                        </Typography>
+                                    )}
                                 </Box>
-                            ))}
-                        </Box>
-                    </Grid>
+                            </Grid>
 
-                    {/* ---------------- PEOPLE INVOLVED ---------------- */}
-                    <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                            People Involved
-                        </Typography>
-                        <Box display="flex" flexWrap="wrap" gap={1}>
-                            {formData.team?.length > 0 ? formData.team.map((person, index) => (
-                                <Chip
-                                    key={index}
-                                    avatar={<Avatar sx={{ bgcolor: "#F1F5F9", color: "#64748B" }}>{person.name.charAt(0)}</Avatar>}
-                                    label={
-                                        <Box>
-                                            <Typography variant="body2" fontWeight={600}>{person.name}</Typography>
-                                            <Typography variant="caption" color="text.secondary" display="block" fontSize={10}>{person.role}</Typography>
+                            {/* ---------------- TEAM MEMBERS ---------------- */}
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                                    <PeopleIcon sx={{ verticalAlign: 'middle', mr: 1, fontSize: 20, color: MAIN_ORANGE }} />
+                                    Team Members ({projectDetails?.currentVolunteers || 0})
+                                </Typography>
+                                <Box display="flex" flexWrap="wrap" gap={1}>
+                                    {projectDetails?.teamMembers?.length > 0 ? (
+                                        projectDetails.teamMembers.map((person, index) => (
+                                            <Chip
+                                                key={index}
+                                                avatar={<Avatar sx={{ bgcolor: "#F1F5F9", color: "#64748B" }}>{person.name.charAt(0)}</Avatar>}
+                                                label={
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight={600}>{person.name}</Typography>
+                                                        <Typography variant="caption" color="text.secondary" display="block" fontSize={10}>{person.role}</Typography>
+                                                    </Box>
+                                                }
+                                                variant="outlined"
+                                                sx={{ height: "auto", py: 0.5, borderColor: "#E2E8F0", borderRadius: 2 }}
+                                            />
+                                        ))
+                                    ) : (
+                                        <Typography variant="caption" color="text.secondary">
+                                            {project?.tags?.team || 'No team members assigned yet.'}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </Grid>
+                        </>
+                    ) : (
+                        <>
+                            {/* ---------------- APPROVAL HISTORY ---------------- */}
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                                    Approval History
+                                </Typography>
+                                <Box sx={{ ml: 1, borderLeft: "2px solid #E2E8F0", pl: 3, py: 1 }}>
+                                    {loadingDetails ? (
+                                        <Box display="flex" justifyContent="center" p={2}>
+                                            <CircularProgress size={24} sx={{ color: MAIN_ORANGE }} />
                                         </Box>
-                                    }
-                                    variant="outlined"
-                                    sx={{ height: "auto", py: 0.5, borderColor: "#E2E8F0", borderRadius: 2 }}
-                                />
-                            )) : (
-                                <Typography variant="caption" color="text.secondary">No team members assigned.</Typography>
-                            )}
-                        </Box>
-                    </Grid>
+                                    ) : projectDetails?.history?.length > 0 ? (
+                                        projectDetails.history.map((step, index) => (
+                                            <Box key={index} sx={{ mb: 3, position: "relative" }}>
+                                                <Box
+                                                    sx={{
+                                                        position: "absolute", left: -31, top: 4, width: 12, height: 12, borderRadius: "50%",
+                                                        bgcolor: index === projectDetails.history.length - 1 ? MAIN_ORANGE : "#CBD5E1",
+                                                        border: "2px solid white",
+                                                        boxShadow: index === projectDetails.history.length - 1 ? `0 0 0 3px rgba(255, 63, 1, 0.2)` : "none"
+                                                    }}
+                                                />
+                                                <Typography variant="body2" fontWeight={700} color="#1E293B">{step.status}</Typography>
+                                                <Box display="flex" justifyContent="space-between" width="90%">
+                                                    <Typography variant="caption" color="text.secondary">{step.date}</Typography>
+                                                    <Typography variant="caption" color="text.secondary" fontStyle="italic">{step.user}</Typography>
+                                                </Box>
+                                            </Box>
+                                        ))
+                                    ) : (
+                                        <Typography variant="caption" color="text.secondary">No approval history available.</Typography>
+                                    )}
+                                </Box>
+                            </Grid>
+
+                            {/* ---------------- PEOPLE INVOLVED ---------------- */}
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                                    People Involved
+                                </Typography>
+                                <Box display="flex" flexWrap="wrap" gap={1}>
+                                    {formData.team?.length > 0 ? formData.team.map((person, index) => (
+                                        <Chip
+                                            key={index}
+                                            avatar={<Avatar sx={{ bgcolor: "#F1F5F9", color: "#64748B" }}>{person.name.charAt(0)}</Avatar>}
+                                            label={
+                                                <Box>
+                                                    <Typography variant="body2" fontWeight={600}>{person.name}</Typography>
+                                                    <Typography variant="caption" color="text.secondary" display="block" fontSize={10}>{person.role}</Typography>
+                                                </Box>
+                                            }
+                                            variant="outlined"
+                                            sx={{ height: "auto", py: 0.5, borderColor: "#E2E8F0", borderRadius: 2 }}
+                                        />
+                                    )) : (
+                                        <Typography variant="caption" color="text.secondary">No team members assigned.</Typography>
+                                    )}
+                                </Box>
+                            </Grid>
+                        </>
+                    )}
                 </Grid>
 
-                {/* ---------------- BUDGET TABLE ---------------- */}
-                <Box mt={4}>
-                    <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                        Budget Breakdown
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, borderColor: "#E2E8F0" }}>
-                        <Table size="small">
-                            <TableHead sx={{ bgcolor: "#F8FAFC" }}>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 600, color: "#475569" }}>Activity / Item</TableCell>
-                                    <TableCell sx={{ fontWeight: 600, color: "#475569" }}>Date</TableCell>
-                                    <TableCell sx={{ fontWeight: 600, color: "#475569" }}>Currency</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 600, color: "#475569" }}>Amount</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {formData.budget?.length > 0 ? formData.budget.map((row, index) => (
-                                    <TableRow key={index} hover>
-                                        <TableCell>{row.item}</TableCell>
-                                        <TableCell>{row.date}</TableCell>
-                                        <TableCell>
-                                            <Chip label={row.currency} size="small" sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: "#F1F5F9" }} />
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                                            {row.amount}
-                                        </TableCell>
-                                    </TableRow>
-                                )) : (
+                {/* ---------------- BUDGET TABLE (only for non-volunteers) ---------------- */}
+                {!isVolunteer && (
+                    <Box mt={4}>
+                        <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                            Budget Breakdown
+                        </Typography>
+                        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, borderColor: "#E2E8F0" }}>
+                            <Table size="small">
+                                <TableHead sx={{ bgcolor: "#F8FAFC" }}>
                                     <TableRow>
-                                        <TableCell colSpan={4} align="center" sx={{ color: "text.secondary" }}>
-                                            No budget details available.
-                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: 600, color: "#475569" }}>Activity / Item</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, color: "#475569" }}>Date</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, color: "#475569" }}>Currency</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600, color: "#475569" }}>Amount</TableCell>
                                     </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Box>
+                                </TableHead>
+                                <TableBody>
+                                    {loadingDetails ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                                                <CircularProgress size={24} sx={{ color: MAIN_ORANGE }} />
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : projectDetails?.budgetBreakdown?.length > 0 ? (
+                                        projectDetails.budgetBreakdown.map((row, index) => (
+                                            <TableRow key={index} hover>
+                                                <TableCell>{row.item}</TableCell>
+                                                <TableCell>{row.date}</TableCell>
+                                                <TableCell>
+                                                    <Chip label={row.currency} size="small" sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: "#F1F5F9" }} />
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                                                    {row.amount}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4} align="center" sx={{ color: "text.secondary" }}>
+                                                No budget details available.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </Box>
+                )}
             </DialogContent>
 
             {/* ---------------- ACTIONS (EDIT / SAVE) ---------------- */}

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
     Box, Typography, IconButton, Paper, Table, TableBody, TableCell, TableContainer, 
     TableHead, TableRow, TextField, Switch, Button, Chip, 
-    Drawer, CircularProgress, Grid, InputBase
+    Drawer, CircularProgress, Grid, InputBase, Pagination
 } from '@mui/material';
 import { 
     Search, Add, Edit, Close
@@ -17,6 +17,10 @@ export default function NGOManagement() {
     const [ngos, setNgos] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const rowsPerPage = 6;
     
     // Drawer & Form State
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -149,7 +153,7 @@ export default function NGOManagement() {
 
     const handleCloseDrawer = () => setIsDrawerOpen(false);
 
-    // --- FILTERING ---
+    // --- FILTERING & PAGINATION ---
 
     const getFilteredNGOs = () => {
         let filtered = ngos;
@@ -163,6 +167,24 @@ export default function NGOManagement() {
         }
         return filtered;
     };
+
+    const getPaginatedNGOs = () => {
+        const filtered = getFilteredNGOs();
+        const startIndex = (page - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        return filtered.slice(startIndex, endIndex);
+    };
+
+    const handlePageChange = (event, newPage) => {
+        setPage(newPage);
+        // Scroll to top of table when page changes
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Reset to page 1 when search term changes
+    useEffect(() => {
+        setPage(1);
+    }, [searchTerm]);
 
     const getStatusChip = (status) => {
         const isActive = status === 'Active';
@@ -235,8 +257,14 @@ export default function NGOManagement() {
                                         <CircularProgress sx={{ color: primaryColor }} />
                                     </TableCell>
                                 </TableRow>
+                            ) : getPaginatedNGOs().length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={9} align="center" sx={{ py: 5, color: '#94A3B8' }}>
+                                        No NGOs found
+                                    </TableCell>
+                                </TableRow>
                             ) : (
-                                getFilteredNGOs().map((ngo) => (
+                                getPaginatedNGOs().map((ngo) => (
                                     <TableRow key={ngo.ong_id} hover>
                                         <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
                                             {ngo.name}
@@ -268,6 +296,36 @@ export default function NGOManagement() {
                         </TableBody>
                     </Table>
                 </TableContainer>
+
+                {/* PAGINATION */}
+                {!loading && getFilteredNGOs().length > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, pt: 3, borderTop: '1px solid #E2E8F0' }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Showing {((page - 1) * rowsPerPage) + 1} to {Math.min(page * rowsPerPage, getFilteredNGOs().length)} of {getFilteredNGOs().length} NGOs
+                        </Typography>
+                        <Pagination
+                            count={Math.ceil(getFilteredNGOs().length / rowsPerPage)}
+                            page={page}
+                            onChange={handlePageChange}
+                            color="primary"
+                            sx={{
+                                '& .MuiPaginationItem-root': {
+                                    color: '#64748B',
+                                    '&.Mui-selected': {
+                                        backgroundColor: primaryColor,
+                                        color: 'white',
+                                        '&:hover': {
+                                            backgroundColor: '#D93602',
+                                        },
+                                    },
+                                    '&:hover': {
+                                        backgroundColor: '#FFF5F0',
+                                    },
+                                },
+                            }}
+                        />
+                    </Box>
+                )}
             </Paper>
 
             {/* DYNAMIC DRAWER (FORM) */}

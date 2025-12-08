@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
     Box, Typography, IconButton, Paper, Table, TableBody, TableCell, TableContainer, 
     TableHead, TableRow, TextField, MenuItem, Switch, Button, Chip, 
-    Drawer, CircularProgress, Grid, InputBase
+    Drawer, CircularProgress, Grid, InputBase, Pagination
 } from '@mui/material';
 import { 
     Search, Add, Edit, Close
@@ -18,6 +18,10 @@ export default function RepresentativeManagement() {
     const [ngos, setNgos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const rowsPerPage = 6;
     
     // Drawer & Form State
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -133,12 +137,12 @@ export default function RepresentativeManagement() {
 
     const handleOpenDrawer = (representative = null) => {
         if (representative) {
-            // Edit Mode
+            // Edit Mode - Format dates to remove time component
             setFormData({
                 representative_id: representative.representative_id,
                 first_name: representative.first_name,
                 last_name: representative.last_name,
-                birth_date: representative.birth_date,
+                birth_date: formatDateForInput(representative.birth_date) || '',
                 address: representative.address || '',
                 email: representative.email,
                 phone: representative.phone || '',
@@ -164,7 +168,26 @@ export default function RepresentativeManagement() {
 
     const handleCloseDrawer = () => setIsDrawerOpen(false);
 
-    // --- FILTERING ---
+    // Format date to show only date without time
+    const formatDate = (dateString) => {
+        if (!dateString) return '-';
+        // If it's in ISO format with time, extract only the date part
+        if (dateString.includes('T')) {
+            return dateString.split('T')[0];
+        }
+        return dateString;
+    };
+
+    // Format date for input field (YYYY-MM-DD)
+    const formatDateForInput = (dateString) => {
+        if (!dateString) return '';
+        if (dateString.includes('T')) {
+            return dateString.split('T')[0];
+        }
+        return dateString;
+    };
+
+    // --- FILTERING & PAGINATION ---
 
     const getFilteredRepresentatives = () => {
         let filtered = representatives;
@@ -177,6 +200,24 @@ export default function RepresentativeManagement() {
         }
         return filtered;
     };
+
+    const getPaginatedRepresentatives = () => {
+        const filtered = getFilteredRepresentatives();
+        const startIndex = (page - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        return filtered.slice(startIndex, endIndex);
+    };
+
+    const handlePageChange = (event, newPage) => {
+        setPage(newPage);
+        // Scroll to top of table when page changes
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Reset to page 1 when search term changes
+    useEffect(() => {
+        setPage(1);
+    }, [searchTerm]);
 
     const getStatusChip = (status) => {
         const isActive = status === 'Active';
@@ -255,8 +296,14 @@ export default function RepresentativeManagement() {
                                         <CircularProgress sx={{ color: primaryColor }} />
                                     </TableCell>
                                 </TableRow>
+                            ) : getPaginatedRepresentatives().length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={9} align="center" sx={{ py: 5, color: '#94A3B8' }}>
+                                        No representatives found
+                                    </TableCell>
+                                </TableRow>
                             ) : (
-                                getFilteredRepresentatives().map((representative) => (
+                                getPaginatedRepresentatives().map((representative) => (
                                     <TableRow key={representative.representative_id} hover>
                                         <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
                                             {representative.first_name}
@@ -264,7 +311,7 @@ export default function RepresentativeManagement() {
                                         <TableCell sx={{ fontWeight: 600, color: '#1E293B' }}>
                                             {representative.last_name}
                                         </TableCell>
-                                        <TableCell sx={{ color: '#64748B' }}>{representative.birth_date}</TableCell>
+                                        <TableCell sx={{ color: '#1E293B' }}>{formatDate(representative.birth_date)}</TableCell>
                                         <TableCell sx={{ color: '#64748B' }}>{representative.address || '-'}</TableCell>
                                         <TableCell sx={{ color: '#64748B' }}>{representative.email}</TableCell>
                                         <TableCell sx={{ color: '#64748B' }}>{representative.phone || '-'}</TableCell>
@@ -290,6 +337,36 @@ export default function RepresentativeManagement() {
                         </TableBody>
                     </Table>
                 </TableContainer>
+
+                {/* PAGINATION */}
+                {!loading && getFilteredRepresentatives().length > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, pt: 3, borderTop: '1px solid #E2E8F0' }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Showing {((page - 1) * rowsPerPage) + 1} to {Math.min(page * rowsPerPage, getFilteredRepresentatives().length)} of {getFilteredRepresentatives().length} representatives
+                        </Typography>
+                        <Pagination
+                            count={Math.ceil(getFilteredRepresentatives().length / rowsPerPage)}
+                            page={page}
+                            onChange={handlePageChange}
+                            color="primary"
+                            sx={{
+                                '& .MuiPaginationItem-root': {
+                                    color: '#64748B',
+                                    '&.Mui-selected': {
+                                        backgroundColor: primaryColor,
+                                        color: 'white',
+                                        '&:hover': {
+                                            backgroundColor: '#D93602',
+                                        },
+                                    },
+                                    '&:hover': {
+                                        backgroundColor: '#FFF5F0',
+                                    },
+                                },
+                            }}
+                        />
+                    </Box>
+                )}
             </Paper>
 
             {/* DYNAMIC DRAWER (FORM) */}

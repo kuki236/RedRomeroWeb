@@ -1,266 +1,186 @@
 import React, { useEffect, useState } from "react";
+import axios from 'axios';
 import {
-    Box,
-    Typography,
-    Paper,
-    Grid,
-    Chip,
-    Table,
-    TableHead,
-    TableRow,
-    TableCell,
-    TableBody,
-    TableContainer,
-    Divider,
+    Box, Typography, Paper, Grid, Chip, Table, TableHead, TableRow, 
+    TableCell, TableBody, TableContainer, Divider, CircularProgress, Alert
 } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import EmailIcon from "@mui/icons-material/Email";
-import PhoneIcon from "@mui/icons-material/Phone";
-import PersonIcon from "@mui/icons-material/Person";
-import FlagIcon from "@mui/icons-material/Flag";
 
 export default function MyNGO() {
     const [ngo, setNgo] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
-        // MOCK DATA
-        setNgo({
-            name: "Global Relief Initiative",
-            city: "Lima",
-            country: "Peru",
-            memberSince: "2020-04-15",
-            icon: <AccountBalanceIcon sx={{ fontSize: 60, color: "#FF3F01" }} />,
+        const fetchNGOData = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                setLoading(true);
+                const response = await axios.get('http://127.0.0.1:8000/api/representative/my-ngo/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                
+                const data = response.data;
 
-            overview: {
-                totalProjects: 42,
-                active: 12,
-                completed: 28,
-                totalRaised: "$540,000",
-                successRate: "87%",
-            },
+                // --- MAPEO DE DATOS ---
+                // Transformamos la respuesta del backend al formato que usa la UI
+                const processedNGO = {
+                    ...data,
+                    // Mapeamos los proyectos activos para que la tabla los lea fácil
+                    activeProjects: data.activeProjects.map(p => ({
+                        id: p.project_id,
+                        name: p.project_name,
+                        // Formateamos dinero: "USD 50,000"
+                        budget: `${p.currency_code || '$'} ${p.budget_amount?.toLocaleString() || '0'}`,
+                        raised: `${p.currency_code || '$'} ${p.total_received?.toLocaleString() || '0'}`,
+                        status: p.status_name, // ej: 'ACTIVO'
+                        progress: p.budget_utilization_percent || 0
+                    }))
+                };
 
-            contact: {
-                address: "Av. Los Héroes 123, Lima, Peru",
-                phone: "+51 987 654 321",
-                email: "contact@globalrelief.org",
-                representative: "María González",
-                repEmail: "mgonzalez@globalrelief.org",
-            },
+                setNgo(processedNGO);
+            } catch (err) {
+                console.error("Error fetching NGO data:", err);
+                setError("Failed to load NGO information.");
+            } finally {
+                setLoading(false);
+            }
+        };
 
-            activeProjects: [
-                {
-                    id: 1,
-                    name: "Clean Water Wells",
-                    budget: "$80,000",
-                    raised: "$65,000",
-                    status: "in progress",
-                    progress: 82,
-                },
-                {
-                    id: 2,
-                    name: "Child Nutrition Program",
-                    budget: "$120,000",
-                    raised: "$120,000",
-                    status: "completed",
-                    progress: 100,
-                },
-                {
-                    id: 3,
-                    name: "Medical Supply Delivery",
-                    budget: "$45,000",
-                    raised: "$28,000",
-                    status: "planning",
-                    progress: 40,
-                },
-            ],
-        });
+        fetchNGOData();
     }, []);
 
+    // Colores basados en los valores exactos de tu Base de Datos (Oracle)
     const statusColors = {
-        planning: { bg: "#FFF4CC", color: "#B08900" },
-        "in progress": { bg: "#D6E4FF", color: "#1A4DB3" },
-        completed: { bg: "#D1F7D1", color: "#1F7A1F" },
-        cancelled: { bg: "#FFD6D6", color: "#B30000" },
+        'PLANIFICACION': { bg: "#FFF4CC", color: "#B08900" },
+        'ACTIVO': { bg: "#D6E4FF", color: "#1A4DB3" },
+        'COMPLETADO': { bg: "#D1F7D1", color: "#1F7A1F" },
+        'CANCELADO': { bg: "#FFD6D6", color: "#B30000" },
+        // Fallbacks por si acaso
+        'PENDIENTE': { bg: "#FFF4CC", color: "#B08900" },
     };
 
-    if (!ngo) return null;
+    if (loading) return <Box display="flex" justifyContent="center" p={10}><CircularProgress sx={{ color: '#FF3F01' }} /></Box>;
+    if (error) return <Box p={3}><Alert severity="error">{error}</Alert></Box>;
+    if (!ngo) return <Typography p={3}>No data available.</Typography>;
 
     return (
         <Box sx={{ p: 3 }}>
             {/* TOP NGO CARD */}
-            <Paper
-                sx={{
-                    p: 3,
-                    mb: 3,
-                    display: "flex",
-                    gap: 3,
-                    alignItems: "center",
-                    borderRadius: 4,
-                }}
-            >
-                {/* ICON */}
-                <Box
-                    sx={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: "50%",
-                        background: "#FFF5F0",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                    }}
-                >
-                    {ngo.icon}
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 4, display: "flex", gap: 3, alignItems: "center", flexWrap: "wrap" }}>
+                <Box sx={{ width: 80, height: 80, borderRadius: "50%", background: "#FFF5F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <AccountBalanceIcon sx={{ fontSize: 40, color: "#FF3F01" }} />
                 </Box>
 
-                {/* INFO */}
                 <Box>
-                    <Typography variant="h4" fontWeight={900}>
-                        {ngo.name}
-                    </Typography>
-
-                    <Box sx={{ display: "flex", alignItems: "center", mt: 1, gap: 1.5 }}>
-                        <LocationOnIcon sx={{ opacity: 0.6 }} />
-                        <Typography sx={{ color: "gray" }}>
-                            {ngo.city}, {ngo.country}
-                        </Typography>
-
+                    <Typography variant="h4" fontWeight={900} color="#1E293B">{ngo.name}</Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", mt: 1, gap: 1.5, flexWrap: "wrap" }}>
+                        <Box display="flex" alignItems="center" gap={0.5}>
+                            <LocationOnIcon sx={{ opacity: 0.6, fontSize: 18 }} />
+                            <Typography sx={{ color: "gray" }}>{ngo.city}, {ngo.country}</Typography>
+                        </Box>
                         <Typography sx={{ opacity: 0.4 }}>|</Typography>
-
-                        <Typography sx={{ color: "gray" }}>
-                            Member since {ngo.memberSince}
-                        </Typography>
+                        <Typography sx={{ color: "gray" }}>Member since {ngo.memberSince !== "N/A" ? ngo.memberSince : "2024"}</Typography>
                     </Box>
                 </Box>
             </Paper>
 
-            {/* OVERVIEW + CONTACT INFO */}
             <Grid container spacing={3}>
-                {/* OVERVIEW CARD */}
+                {/* OVERVIEW */}
                 <Grid item xs={12} md={6}>
-                    <Paper
-                        sx={{
-                            p: 3,
-                            height: "100%",
-                            borderRadius: 4,
-                        }}
-                    >
-                        <Typography variant="h6" fontWeight={800} mb={2}>
-                            Overview
-                        </Typography>
-
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}>
-                            <Typography>
-                                <strong>Total Projects:</strong> {ngo.overview.totalProjects}
-                            </Typography>
-                            <Typography>
-                                <strong>Active:</strong> {ngo.overview.active}
-                            </Typography>
-                            <Typography>
-                                <strong>Completed:</strong> {ngo.overview.completed}
-                            </Typography>
-                            <Typography>
-                                <strong>Total Raised:</strong> {ngo.overview.totalRaised}
-                            </Typography>
-                            <Typography>
-                                <strong>Success Rate:</strong> {ngo.overview.successRate}
-                            </Typography>
+                    <Paper sx={{ p: 3, height: "100%", borderRadius: 4 }}>
+                        <Typography variant="h6" fontWeight={800} mb={2} color="#1E293B">Overview</Typography>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                            <Box display="flex" justifyContent="space-between">
+                                <Typography color="text.secondary">Total Projects</Typography>
+                                <Typography fontWeight={700}>{ngo.overview?.totalProjects}</Typography>
+                            </Box>
+                            <Divider />
+                            <Box display="flex" justifyContent="space-between">
+                                <Typography color="text.secondary">Active Budgets</Typography>
+                                <Typography fontWeight={700}>{ngo.overview?.active}</Typography>
+                            </Box>
+                            <Divider />
+                            <Box display="flex" justifyContent="space-between">
+                                <Typography color="text.secondary">Total Raised</Typography>
+                                <Typography fontWeight={700} color="success.main">
+                                    ${ngo.overview?.totalRaised?.toLocaleString()}
+                                </Typography>
+                            </Box>
+                            <Divider />
+                            <Box display="flex" justifyContent="space-between">
+                                <Typography color="text.secondary">Success Rate</Typography>
+                                <Typography fontWeight={700}>{ngo.overview?.successRate}</Typography>
+                            </Box>
                         </Box>
                     </Paper>
                 </Grid>
 
                 {/* CONTACT INFO */}
                 <Grid item xs={12} md={6}>
-                    <Paper
-                        sx={{
-                            p: 3,
-                            height: "100%",
-                            borderRadius: 4,
-                        }}
-                    >
-                        <Typography variant="h6" fontWeight={800} mb={2}>
-                            Contact Info
-                        </Typography>
-
+                    <Paper sx={{ p: 3, height: "100%", borderRadius: 4 }}>
+                        <Typography variant="h6" fontWeight={800} mb={2} color="#1E293B">Contact Info</Typography>
                         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}>
-                            <Typography>
-                                <strong>Address:</strong> {ngo.contact.address}
-                            </Typography>
-
-                            <Typography>
-                                <strong>Phone:</strong> {ngo.contact.phone}
-                            </Typography>
-
-                            <Typography>
-                                <strong>Email:</strong> {ngo.contact.email}
-                            </Typography>
-
-                            <Divider sx={{ my: 1 }} />
-
-                            <Typography>
-                                <strong>Representative:</strong> {ngo.contact.representative}
-                            </Typography>
-
-                            <Typography>
-                                <strong>Rep Email:</strong> {ngo.contact.repEmail}
-                            </Typography>
+                            <Typography><strong>Address:</strong> {ngo.contact?.address}</Typography>
+                            <Typography><strong>Phone:</strong> {ngo.contact?.phone}</Typography>
+                            <Typography><strong>Email:</strong> {ngo.contact?.email}</Typography>
+                            
+                            <Box sx={{ mt: 2, p: 2, bgcolor: "#F8FAFC", borderRadius: 2 }}>
+                                <Typography variant="subtitle2" color="text.secondary" mb={0.5}>Representative</Typography>
+                                <Typography fontWeight={600}>{ngo.contact?.representative}</Typography>
+                                <Typography variant="body2" color="text.secondary">{ngo.contact?.repEmail}</Typography>
+                            </Box>
                         </Box>
                     </Paper>
                 </Grid>
             </Grid>
 
-            {/* ACTIVE PROJECTS TABLE */}
-            <Paper
-                sx={{
-                    mt: 3,
-                    p: 3,
-                    borderRadius: 4,
-                }}
-            >
-                <Typography variant="h6" fontWeight={800} mb={2}>
-                    Active Projects Budget
+            {/* --- ACTIVE PROJECTS BUDGET (CORREGIDO) --- */}
+            <Paper sx={{ mt: 3, p: 3, borderRadius: 4 }}>
+                <Typography variant="h6" fontWeight={800} mb={2} color="#1E293B">
+                    Active Projects Budget (Snapshot)
                 </Typography>
-
+                
                 <TableContainer>
                     <Table>
                         <TableHead>
                             <TableRow sx={{ backgroundColor: "#F4F7FB" }}>
-                                <TableCell>
-                                    <strong>PROJECT</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>BUDGET</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>RAISED</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>STATUS</strong>
-                                </TableCell>
+                                <TableCell><strong>PROJECT</strong></TableCell>
+                                <TableCell><strong>BUDGET</strong></TableCell>
+                                <TableCell><strong>RAISED</strong></TableCell>
+                                <TableCell><strong>STATUS / UTILIZATION</strong></TableCell>
                             </TableRow>
                         </TableHead>
-
                         <TableBody>
-                            {ngo.activeProjects.map((p) => (
-                                <TableRow key={p.id} hover sx={{ height: 68 }}>
-                                    <TableCell>{p.name}</TableCell>
-                                    <TableCell>{p.budget}</TableCell>
-                                    <TableCell>{p.raised}</TableCell>
-
-                                    <TableCell>
-                                        <Chip
-                                            label={`${p.status} (${p.progress}%)`}
-                                            sx={{
-                                                backgroundColor: statusColors[p.status]?.bg,
-                                                color: statusColors[p.status]?.color,
-                                                fontWeight: 700,
-                                                textTransform: "capitalize",
-                                            }}
-                                        />
+                            {ngo.activeProjects && ngo.activeProjects.length > 0 ? (
+                                ngo.activeProjects.map((p) => (
+                                    <TableRow key={p.id} hover>
+                                        <TableCell sx={{ fontWeight: 500 }}>{p.name}</TableCell>
+                                        <TableCell>{p.budget}</TableCell>
+                                        <TableCell>{p.raised}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={`${p.status} (${p.progress}%)`}
+                                                size="small"
+                                                sx={{
+                                                    backgroundColor: statusColors[p.status]?.bg || '#E0E0E0',
+                                                    color: statusColors[p.status]?.color || '#333',
+                                                    fontWeight: 700, 
+                                                    textTransform: "capitalize",
+                                                    fontSize: '0.75rem'
+                                                }}
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                                        No active projects found for this NGO.
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                            )}
                         </TableBody>
                     </Table>
                 </TableContainer>

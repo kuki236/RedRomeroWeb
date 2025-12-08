@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
     Box,
     Typography,
@@ -29,50 +30,37 @@ export default function MyAssignedProjects() {
     const [selectedProject, setSelectedProject] = useState(null);
 
     useEffect(() => {
-        setProjects([
-            {
-                id: 1,
-                name: "Water Well Construction",
-                description: "Building sustainable water wells in rural communities.",
-                fullDescription:
-                    "This project aims to construct durable water wells to provide long-term clean water access to underserved populations.",
-                start: "2025-02-01",
-                end: "2025-06-30",
-                status: "in progress",
-                progress: 45,
-                ngo: {
-                    name: "Global Water Foundation",
-                    description: "Dedicated to providing clean and safe drinking water worldwide.",
-                },
-                // Datos extra simulados para que el modal se vea completo
-                location: "Piura, Peru",
-                raised: "$12,000",
-                goal: "$25,000",
-                percent: 45,
-                timeline: "Feb 2025 - Jun 2025",
-                volunteers: "8 / 12"
-            },
-            {
-                id: 2,
-                name: "Community School Support",
-                description: "Providing tutoring and school supplies to local children.",
-                fullDescription: "A comprehensive program to boost literacy rates in rural areas through after-school tutoring.",
-                start: "2025-03-01",
-                end: "2025-12-01",
-                status: "planning",
-                progress: 10,
-                ngo: {
-                    name: "Education First",
-                    description: "Empowering youth through education."
-                },
-                location: "Cusco, Peru",
-                raised: "$5,000",
-                goal: "$10,000",
-                percent: 50,
-                timeline: "Mar 2025 - Dec 2025",
-                volunteers: "4 / 10"
+        const fetchProjects = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const response = await axios.get('http://127.0.0.1:8000/api/volunteer/my-projects/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                // Transform data to match component format
+                const transformed = response.data.map(p => ({
+                    id: p.assignment_id || p.project_id,
+                    name: p.project_name,
+                    description: p.project_name, // Use project name as description if needed
+                    fullDescription: p.project_name,
+                    start: p.assignment_date ? p.assignment_date.split('T')[0] : '',
+                    end: p.end_date ? p.end_date.split('T')[0] : '',
+                    status: p.project_status?.toLowerCase() || 'in progress',
+                    progress: 50, // Calculate based on dates if needed
+                    ngo: { name: p.ngo_name || 'N/A' },
+                    location: 'N/A',
+                    raised: '$0',
+                    goal: '$0',
+                    percent: 0,
+                    timeline: `${p.assignment_date?.split('T')[0] || ''} - ${p.end_date?.split('T')[0] || 'Ongoing'}`,
+                    volunteers: 'N/A'
+                }));
+                setProjects(transformed);
+            } catch (error) {
+                console.error("Error fetching volunteer projects:", error);
             }
-        ]);
+        };
+        fetchProjects();
     }, []);
 
     const statusColors = {

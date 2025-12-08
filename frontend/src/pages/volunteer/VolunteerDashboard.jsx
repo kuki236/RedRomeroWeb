@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import {
-    Box, Typography, Grid, Paper, Button, Chip
+    Box, Typography, Grid, Paper, Button, Chip, CircularProgress
 } from '@mui/material';
 import {
     Folder, AccessTime, TaskAlt, Star, CheckCircle,
@@ -9,77 +10,119 @@ import {
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { useNavigate } from 'react-router-dom'; // IMPORTANTE: Para la navegación
+import { useNavigate } from 'react-router-dom';
 import { useRoleProtection } from '../../hooks/useRoleProtection';
 
 // --- IMPORTAR EL MODAL ---
 import ProjectDetailsModal from "../ProjectDetailsModal";
-
-// --- MOCK DATA ---
-const kpiData = [
-    { title: 'Active Projects', value: '2', icon: <Folder sx={{ color: '#F59E0B', fontSize: 30 }} />, bgColor: '#FFFBEB' },
-    { title: 'Hours This Mth', value: '156', icon: <AccessTime sx={{ color: '#6B7280', fontSize: 30 }} />, bgColor: '#F3F4F6' },
-    { title: 'Projects Complete', value: '3', icon: <TaskAlt sx={{ color: '#EF4444', fontSize: 30 }} />, bgColor: '#FEF2F2' },
-    { title: 'Rating Average', value: '4.8', icon: <Star sx={{ color: '#FCD34D', fontSize: 30 }} />, bgColor: '#FFFBEB' },
-];
-
-const specialties = [
-    { name: 'Medicina General', desc: 'Primary & emergency care' },
-    { name: 'Ingeniería Civil', desc: 'Infrastructure projects' },
-    { name: 'Gestión de Proyectos', desc: 'Coordination & admin' },
-];
-
-const contributionData = [
-    { month: 'JAN', hours: 18 },
-    { month: 'APR', hours: 40 },
-    { month: 'JUL', hours: 28 },
-    { month: 'OCT', hours: 62 },
-];
-
-const opportunities = [
-    {
-        id: 1,
-        title: 'Medical Brigades in Rural Communities',
-        org: 'Salud sin Fronteras',
-        location: 'Antioquia, Colombia',
-        match: 95,
-        tags: { specialty: 'Medicina General', start: 'Oct 15, 2024', duration: '2 Weeks', team: '12 Volunteers' },
-        isNew: true
-    },
-    {
-        id: 2,
-        title: 'Infrastructure Improvement for Local School',
-        org: 'Constructores del Futuro',
-        location: 'Cusco, Perú',
-        match: 88,
-        tags: { specialty: 'Ingeniería Civil', start: 'Nov 01, 2024', duration: '4 Weeks', team: '8 Volunteers' },
-        isNew: false
-    }
-];
 
 export default function VolunteerDashboard() {
     // 1. Security Check
     useRoleProtection('VOLUNTEER');
     const navigate = useNavigate();
 
-    // 2. States for Modal
+    // 2. States
+    const [loading, setLoading] = useState(true);
+    const [dashboardData, setDashboardData] = useState({
+        volunteerName: 'Volunteer',
+        kpis: {
+            activeProjects: 0,
+            hoursThisMonth: 0,
+            projectsComplete: 0,
+            ratingAverage: 4.8
+        },
+        specialties: [],
+        contributionData: [],
+        opportunities: []
+    });
+
+    // 3. States for Modal
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState(null);
+    const [applying, setApplying] = useState({});
+    const [savedProjects, setSavedProjects] = useState([]);
 
-    // 3. Handlers
+    // 4. Load saved projects from localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem('volunteer_saved_projects');
+        if (saved) {
+            setSavedProjects(JSON.parse(saved));
+        }
+    }, []);
+
+    // 5. Fetch Dashboard Data
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                setLoading(true);
+                const response = await axios.get('http://127.0.0.1:8000/api/volunteer/dashboard-data/', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setDashboardData(response.data);
+            } catch (error) {
+                console.error("Error loading dashboard:", error);
+                // Keep default values on error
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, []);
+
+    // 5. Prepare KPI Data
+    const kpiData = [
+        { 
+            title: 'Active Projects', 
+            value: dashboardData.kpis.activeProjects.toString(), 
+            icon: <Folder sx={{ color: '#F59E0B', fontSize: 30 }} />, 
+            bgColor: '#FFFBEB' 
+        },
+        { 
+            title: 'Hours This Mth', 
+            value: dashboardData.kpis.hoursThisMonth.toString(), 
+            icon: <AccessTime sx={{ color: '#6B7280', fontSize: 30 }} />, 
+            bgColor: '#F3F4F6' 
+        },
+        { 
+            title: 'Projects Complete', 
+            value: dashboardData.kpis.projectsComplete.toString(), 
+            icon: <TaskAlt sx={{ color: '#EF4444', fontSize: 30 }} />, 
+            bgColor: '#FEF2F2' 
+        },
+        { 
+            title: 'Rating Average', 
+            value: dashboardData.kpis.ratingAverage.toString(), 
+            icon: <Star sx={{ color: '#FCD34D', fontSize: 30 }} />, 
+            bgColor: '#FFFBEB' 
+        },
+    ];
+
+    // 6. Handlers
     const handleOpenDetails = (opp) => {
-        // Adaptamos los datos de "opportunity" al formato que espera el Modal genérico
-        // ya que el dashboard de voluntarios tiene campos ligeramente distintos (tags).
         const formattedProject = {
             ...opp,
-            name: opp.title, // El modal usa 'name', aquí tenemos 'title'
-            status: "Recruiting",
-            volunteers: opp.tags.team,
-            timeline: `${opp.tags.start} (${opp.tags.duration})`,
-            // Datos simulados de fondos para que el modal no se vea vacío
-            raised: "$15,000",
-            goal: "$20,000",
-            percent: 75
+            id: opp.id || opp.project_id,
+            project_id: opp.id || opp.project_id,
+            name: opp.title || opp.name,
+            title: opp.title || opp.name,
+            status: opp.status_name || "ACTIVO",
+            status_name: opp.status_name || "ACTIVO",
+            volunteers: opp.tags?.team || 'N/A',
+            timeline: `${opp.tags?.start || opp.start_date || 'N/A'} (${opp.tags?.duration || 'N/A'})`,
+            start_date: opp.tags?.start || opp.start_date,
+            ong: opp.org || opp.ngo_name,
+            ngo_name: opp.org || opp.ngo_name,
+            description: `Project by ${opp.org || opp.ngo_name} in ${opp.location}`,
+            raised: "$0",
+            goal: "N/A",
+            percent: 0
         };
         setSelectedProject(formattedProject);
         setDetailsOpen(true);
@@ -90,11 +133,77 @@ export default function VolunteerDashboard() {
         setSelectedProject(null);
     };
 
+    const handleApply = async (opp) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Authentication required. Please log in again.');
+            return;
+        }
+
+        const projectId = opp.id || opp.project_id;
+        if (!projectId) {
+            alert('Invalid project data.');
+            return;
+        }
+
+        if (!window.confirm(`Are you sure you want to apply to "${opp.title || opp.name}"?`)) {
+            return;
+        }
+
+        try {
+            setApplying({ ...applying, [projectId]: true });
+            await axios.post('http://127.0.0.1:8000/api/volunteer/apply-project/', {
+                project_id: parseInt(projectId)
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            alert('Application submitted successfully! You will be notified once it is reviewed.');
+            // Remove from dashboard opportunities
+            setDashboardData(prev => ({
+                ...prev,
+                opportunities: prev.opportunities.filter(p => (p.id || p.project_id) !== projectId)
+            }));
+        } catch (error) {
+            console.error("Error applying to project:", error);
+            const errorMsg = error.response?.data?.error || error.message || "Failed to submit application";
+            alert(`Error: ${errorMsg}`);
+        } finally {
+            setApplying({ ...applying, [projectId]: false });
+        }
+    };
+
+    const handleSaveForLater = (opp) => {
+        const projectId = opp.id || opp.project_id;
+        const updated = savedProjects.includes(projectId)
+            ? savedProjects.filter(id => id !== projectId)
+            : [...savedProjects, projectId];
+        
+        setSavedProjects(updated);
+        localStorage.setItem('volunteer_saved_projects', JSON.stringify(updated));
+        
+        if (updated.includes(projectId)) {
+            alert('Project saved for later!');
+        } else {
+            alert('Project removed from saved list.');
+        }
+    };
+
+    if (loading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+                <CircularProgress sx={{ color: '#FF3F01' }} />
+            </Box>
+        );
+    }
+
     return (
         <Box>
             {/* HEADER */}
             <Box sx={{ mb: 4 }}>
-                <Typography variant="h4" fontWeight={800} color="#1E293B">Hello, Elena! 👋</Typography>
+                <Typography variant="h4" fontWeight={800} color="#1E293B">
+                    Hello, {dashboardData.volunteerName}! 👋
+                </Typography>
                 <Typography variant="body2" color="text.secondary">Ready to make an impact today?</Typography>
             </Box>
 
@@ -123,15 +232,19 @@ export default function VolunteerDashboard() {
                         <Typography variant="h6" fontWeight={700} color="#1E293B" mb={3}>My Specialties</Typography>
 
                         <Box display="flex" flexDirection="column" gap={3}>
-                            {specialties.map((spec, idx) => (
-                                <Box key={idx} display="flex" gap={2}>
-                                    <CheckCircle sx={{ color: '#65A30D', fontSize: 28 }} />
-                                    <Box>
-                                        <Typography variant="subtitle2" fontWeight={700} color="#1E293B">{spec.name}</Typography>
-                                        <Typography variant="caption" color="text.secondary">{spec.desc}</Typography>
+                            {dashboardData.specialties.length > 0 ? (
+                                dashboardData.specialties.map((spec, idx) => (
+                                    <Box key={idx} display="flex" gap={2}>
+                                        <CheckCircle sx={{ color: '#65A30D', fontSize: 28 }} />
+                                        <Box>
+                                            <Typography variant="subtitle2" fontWeight={700} color="#1E293B">{spec.name}</Typography>
+                                            <Typography variant="caption" color="text.secondary">{spec.desc}</Typography>
+                                        </Box>
                                     </Box>
-                                </Box>
-                            ))}
+                                ))
+                            ) : (
+                                <Typography variant="caption" color="text.secondary">No specialties assigned yet.</Typography>
+                            )}
                         </Box>
                     </Paper>
                 </Grid>
@@ -142,22 +255,28 @@ export default function VolunteerDashboard() {
                         <Typography variant="h6" fontWeight={700} color="#1E293B" mb={1}>Contribution This Year</Typography>
 
                         <Box sx={{ height: 250, width: '100%' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={contributionData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
-                                    <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="hours"
-                                        stroke="#FF3F01"
-                                        strokeWidth={3}
-                                        dot={{ r: 5, fill: '#FFFFFF', stroke: '#FF3F01', strokeWidth: 3 }}
-                                        activeDot={{ r: 7 }}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
+                            {dashboardData.contributionData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={dashboardData.contributionData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} dy={10} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
+                                        <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="hours"
+                                            stroke="#FF3F01"
+                                            strokeWidth={3}
+                                            dot={{ r: 5, fill: '#FFFFFF', stroke: '#FF3F01', strokeWidth: 3 }}
+                                            activeDot={{ r: 7 }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+                                    <Typography variant="body2" color="text.secondary">No contribution data available yet.</Typography>
+                                </Box>
+                            )}
                         </Box>
                     </Paper>
                 </Grid>
@@ -179,7 +298,8 @@ export default function VolunteerDashboard() {
                 </Box>
 
                 <Box display="flex" flexDirection="column" gap={3}>
-                    {opportunities.map((opp) => (
+                    {dashboardData.opportunities.length > 0 ? (
+                        dashboardData.opportunities.map((opp) => (
                         <Paper key={opp.id} elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid #E2E8F0' }}>
                             <Box display="flex" justifyContent="space-between" flexWrap="wrap" mb={2}>
                                 <Box>
@@ -221,22 +341,46 @@ export default function VolunteerDashboard() {
                             </Grid>
 
                             <Box display="flex" gap={2}>
-                                <Button variant="contained" sx={{ bgcolor: '#FF3F01', fontWeight: 700, textTransform: 'none', '&:hover': { bgcolor: '#D93602' } }}>
-                                    Apply Now
+                                <Button 
+                                    variant="contained" 
+                                    onClick={() => handleApply(opp)}
+                                    disabled={applying[opp.id || opp.project_id]}
+                                    sx={{ 
+                                        bgcolor: '#FF3F01', 
+                                        fontWeight: 700, 
+                                        textTransform: 'none', 
+                                        '&:hover': { bgcolor: '#D93602' },
+                                        '&:disabled': { bgcolor: '#ccc' }
+                                    }}
+                                >
+                                    {applying[opp.id || opp.project_id] ? 'Applying...' : 'Apply Now'}
                                 </Button>
-                                <Button startIcon={<BookmarkBorder />} sx={{ color: '#64748B', textTransform: 'none', fontWeight: 600 }}>Save for Later</Button>
-
-                                {/* --- BOTÓN VIEW DETAILS CONECTADO AL MODAL --- */}
+                                <Button 
+                                    startIcon={<BookmarkBorder />} 
+                                    onClick={() => handleSaveForLater(opp)}
+                                    sx={{ 
+                                        color: savedProjects.includes(opp.id || opp.project_id) ? '#FF3F01' : '#64748B', 
+                                        textTransform: 'none', 
+                                        fontWeight: 600 
+                                    }}
+                                >
+                                    {savedProjects.includes(opp.id || opp.project_id) ? 'Saved' : 'Save for Later'}
+                                </Button>
                                 <Button
                                     startIcon={<Visibility />}
-                                    sx={{ color: '#64748B', textTransform: 'none', fontWeight: 600 }}
                                     onClick={() => handleOpenDetails(opp)}
+                                    sx={{ color: '#64748B', textTransform: 'none', fontWeight: 600 }}
                                 >
                                     View Details
                                 </Button>
                             </Box>
                         </Paper>
-                    ))}
+                        ))
+                    ) : (
+                        <Paper elevation={0} sx={{ p: 4, borderRadius: 3, border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                            <Typography variant="body1" color="text.secondary">No available opportunities at the moment.</Typography>
+                        </Paper>
+                    )}
                 </Box>
             </Box>
 
