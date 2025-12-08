@@ -9,7 +9,7 @@ from users.views import (
     AuditLogView, ReportsAnalyticsView,
     # Workforce & Operations
     NGOListView, NGOUpdateView,
-    EmployeeListView, EmployeeUpdateView,
+    EmployeeListView, EmployeeUpdateView, 
     VolunteerListView, VolunteerUpdateView, VolunteerSpecialtyView,
     RepresentativeListView, RepresentativeUpdateView,
     ProjectListView, ProjectUpdateView, ProjectCloseView, ProjectReactivateView,
@@ -43,12 +43,12 @@ urlpatterns = [
     path('api/admin/users/', UserManagementView.as_view(), name='admin_users_list'),
     path('api/admin/users/update/', UserManagementView.as_view(), name='admin_users_update'),
 
-
+    
     # --- Employee Management (ESTAS SON LAS QUE TE FALTAN) ---
-    path('api/admin/employees/', EmployeeManagementView.as_view(), name='admin_employees_list'),
-    path('api/admin/employees/update/', EmployeeManagementView.as_view(), name='admin_employees_update'),
-    path('api/admin/employees/<int:pk>/', EmployeeManagementView.as_view(), name='admin_employees_delete'),
-
+    #path('api/admin/employees/', EmployeeManagementView.as_view(), name='admin_employees_list'),
+    #path('api/admin/employees/update/', EmployeeManagementView.as_view(), name='admin_employees_update'),
+    #path('api/admin/employees/<int:pk>/', EmployeeManagementView.as_view(), name='admin_employees_delete'),
+    
     path('api/admin/config/', SystemConfigView.as_view(), name='admin_config'),
     path('api/profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/admin/audit/', AuditLogView.as_view(), name='audit-logs'),

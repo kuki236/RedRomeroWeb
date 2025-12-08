@@ -167,7 +167,7 @@ export default function RepresentativeDashboard() {
                     <Typography variant="body1" color="text.secondary" mt={0.5}>Representative Dashboard</Typography>
                 </Box>
                 <Box display="flex" gap={2}>
-                    <Button variant="outlined" sx={headerButtonStyle}>My Profile</Button>
+                    <Button variant="outlined" sx={headerButtonStyle} onClick={() => navigate('/representative/perfil')} >My Profile</Button>
                     <Button variant="outlined" sx={headerButtonStyle} onClick={() => navigate("/representative/mi-ong")}>My NGO</Button>
                 </Box>
             </Box>
