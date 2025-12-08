@@ -286,7 +286,7 @@ class SystemConfigView(APIView):
                 data = fetch_raw_query("SELECT type_id as id, type_name as name, description FROM Donor_Type")
 
             elif config_type == 'sdgGoals':
-                data = fetch_raw_query("SELECT sdg_id as id, goal_name as name, goal_number as number, description FROM SDG_Goal ORDER BY goal_number")
+                data = fetch_raw_query("""SELECT sdg_id as "id", goal_name as "name", goal_number as "number", description as "description" FROM SDG_Goal ORDER BY goal_number""")
 
             elif config_type == 'currencies':
                 data = fetch_raw_query("SELECT currency_id as id, currency_name as name, currency_code as code, symbol, exchange_rate_to_usd as rate FROM Currency")

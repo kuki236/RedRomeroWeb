@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios'; // IMPORTANTE
+import axios from 'axios';
 import {
     Box, Typography, Paper, Tabs, Tab, Grid, TextField, Button,
     List, ListItem, ListItemText, ListItemSecondaryAction, IconButton,
-    Chip, Divider, Avatar, CircularProgress, Snackbar, Alert
+    Chip, Divider, Avatar, CircularProgress, Snackbar, Alert,
+    ListItemButton // <--- 1. IMPORTAR ESTO
 } from '@mui/material';
 import {
     Category, VerifiedUser, VolunteerActivism,
@@ -15,8 +16,8 @@ const primaryColor = '#FF3F01';
 export default function ConfigurationSettings() {
     // --- STATE ---
     const [activeTab, setActiveTab] = useState(0); 
-    const [dataList, setDataList] = useState([]); // Data real de BD
-    const [categoriesList, setCategoriesList] = useState([]); // Para el dropdown de padres
+    const [dataList, setDataList] = useState([]); 
+    const [categoriesList, setCategoriesList] = useState([]); 
     const [loading, setLoading] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     
@@ -44,18 +45,14 @@ export default function ConfigurationSettings() {
         const token = localStorage.getItem('token');
         setLoading(true);
         try {
-            // 1. Fetch data for current tab
             const response = await axios.get(`http://127.0.0.1:8000/api/admin/config/?type=${currentKey}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setDataList(response.data);
 
-            // 2. If we are on categories tab, we fetch it again to populate the 'Parent' dropdown properly if needed elsewhere, 
-            // but here we can just use the response.data if it is categories.
             if (currentKey === 'categories') {
                 setCategoriesList(response.data);
             } else if (categoriesList.length === 0) {
-                // If not on categories but we need the dropdown (unlikely in this design but good practice), fetch it once.
                 const catRes = await axios.get(`http://127.0.0.1:8000/api/admin/config/?type=categories`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -143,7 +140,7 @@ export default function ConfigurationSettings() {
                 <TextField fullWidth size="small" name="name" value={formData.name} onChange={handleChange} />
             </Grid>
             
-            {activeTab === 0 && ( // Categories
+            {activeTab === 0 && ( 
                 <Grid item xs={12}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary">Parent Category</Typography>
                     <TextField select fullWidth size="small" name="parent" value={formData.parent || 'None'} onChange={handleChange} SelectProps={{ native: true }}>
@@ -153,14 +150,14 @@ export default function ConfigurationSettings() {
                 </Grid>
             )}
             
-            {activeTab === 3 && ( // SDG Goals
+            {activeTab === 3 && ( 
                 <Grid item xs={12}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary">Goal Number</Typography>
                     <TextField fullWidth size="small" name="number" type="number" value={formData.number} onChange={handleChange} />
                 </Grid>
             )}
             
-            {activeTab === 4 && ( // Currencies
+            {activeTab === 4 && ( 
                 <>
                     <Grid item xs={6}>
                         <Typography variant="caption" fontWeight={700} color="text.secondary">Code</Typography>
@@ -186,7 +183,6 @@ export default function ConfigurationSettings() {
 
     return (
         <Box sx={{ p: 3 }}>
-            {/* ... (Header y Tabs igual que antes) ... */}
             <Paper sx={{ mb: 3, borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none', overflow: 'hidden' }}>
                 <Box sx={{ p: 3, borderBottom: '1px solid #E2E8F0', bgcolor: '#FAFAFA' }}>
                     <Typography variant="h5" fontWeight={800} color="#1E293B">Configuration Settings</Typography>
@@ -220,32 +216,34 @@ export default function ConfigurationSettings() {
                                 <List>
                                     {dataList.map((item) => (
                                         <React.Fragment key={item.id}>
+                                            {/* CORRECCIÓN AQUI: Usar ListItemButton dentro de ListItem */}
                                             <ListItem 
-                                                button 
-                                                // Disable edit on click if you haven't implemented UPDATE in backend yet
-                                                onClick={() => handleEdit(item)} 
-                                                selected={selectedItem?.id === item.id}
-                                                sx={{ '&.Mui-selected': { bgcolor: '#FFF5F2' } }}
-                                            >
-                                                {/* Avatars */}
-                                                {activeTab === 4 && <Avatar sx={{ bgcolor: '#E2E8F0', color: '#1E293B', mr: 2, width: 32, height: 32, fontSize: 13 }}>{item.code}</Avatar>}
-                                                {activeTab === 3 && <Avatar sx={{ bgcolor: primaryColor, color: 'white', mr: 2, width: 32, height: 32, fontSize: 14 }}>{item.number}</Avatar>}
-
-                                                <ListItemText 
-                                                    primary={
-                                                        <Box display="flex" alignItems="center" gap={1}>
-                                                            <Typography fontWeight={600} color="#1E293B">{item.name}</Typography>
-                                                            {item.parent && <Chip label={item.parent} size="small" sx={{ height: 20, fontSize: 10 }} />}
-                                                            {item.rate !== undefined && <Chip label={item.rate} size="small" color="success" variant="outlined" sx={{ height: 20, fontSize: 10 }} />}
-                                                        </Box>
-                                                    }
-                                                    secondary={item.description}
-                                                />
-                                                <ListItemSecondaryAction>
+                                                disablePadding
+                                                secondaryAction={
                                                     <IconButton edge="end" size="small" onClick={() => handleDelete(item.id)}>
                                                         <Delete fontSize="small" sx={{ color: '#EF4444' }} />
                                                     </IconButton>
-                                                </ListItemSecondaryAction>
+                                                }
+                                            >
+                                                <ListItemButton 
+                                                    onClick={() => handleEdit(item)}
+                                                    selected={selectedItem?.id === item.id}
+                                                    sx={{ '&.Mui-selected': { bgcolor: '#FFF5F2' } }}
+                                                >
+                                                    {activeTab === 4 && <Avatar sx={{ bgcolor: '#E2E8F0', color: '#1E293B', mr: 2, width: 32, height: 32, fontSize: 13 }}>{item.code}</Avatar>}
+                                                    {activeTab === 3 && <Avatar sx={{ bgcolor: primaryColor, color: 'white', mr: 2, width: 32, height: 32, fontSize: 14 }}>{item.number}</Avatar>}
+
+                                                    <ListItemText 
+                                                        primary={
+                                                            <Box display="flex" alignItems="center" gap={1}>
+                                                                <Typography fontWeight={600} color="#1E293B">{item.name}</Typography>
+                                                                {item.parent && <Chip label={item.parent} size="small" sx={{ height: 20, fontSize: 10 }} />}
+                                                                {item.rate !== undefined && <Chip label={item.rate} size="small" color="success" variant="outlined" sx={{ height: 20, fontSize: 10 }} />}
+                                                            </Box>
+                                                        }
+                                                        secondary={item.description}
+                                                    />
+                                                </ListItemButton>
                                             </ListItem>
                                             <Divider component="li" />
                                         </React.Fragment>
@@ -262,7 +260,6 @@ export default function ConfigurationSettings() {
                 {/* FORM */}
                 <Grid item xs={12} md={5} lg={4}>
                     <Paper sx={{ p: 3, borderRadius: 3, border: '1px solid #E2E8F0', boxShadow: 'none', position: 'sticky', top: 20 }}>
-                        {/* ... (Header del form igual) ... */}
                         <Box display="flex" alignItems="center" gap={1} mb={3}>
                             <Box sx={{ bgcolor: '#FFF0EB', p: 1, borderRadius: 2 }}>
                                 {selectedItem ? <Edit sx={{ color: '#3B82F6' }} /> : <Add sx={{ color: primaryColor }} />}
